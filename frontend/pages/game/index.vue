@@ -16,7 +16,7 @@
         <text v-else class="empty-desk">等待首出</text>
         <text class="last-play">{{ lastPlayerText }}</text>
       </view>
-      <view class="turn-pill">{{ store.game?.winner ? '牌局已结束' : '轮到你出牌' }}</view>
+      <view class="turn-pill">{{ turnText }}</view>
     </view>
 
     <view class="hand-panel">
@@ -28,8 +28,8 @@
       </scroll-view>
       <view class="actions">
         <u-button plain color="#d8b65b" text="AI推荐" @click="goRecommend" />
-        <u-button plain color="#567064" text="PASS" @click="pass" />
-        <u-button type="primary" color="#0b5d3b" text="出牌" @click="play" />
+        <u-button plain color="#567064" text="PASS" :disabled="store.aiThinking" @click="pass" />
+        <u-button type="primary" color="#0b5d3b" text="出牌" :loading="store.aiThinking" :disabled="store.aiThinking" @click="play" />
       </view>
       <u-button class="finish-link" type="primary" plain color="#0b5d3b" size="small" text="结束演示并查看结算" @click="finish" />
     </view>
@@ -42,7 +42,12 @@ import { useGameStore } from '@/store/game'
 import PlayingCard from '@/components/PlayingCard.vue'
 const store = useGameStore()
 const tableCards = computed(() => store.game?.state?.last_played_cards || [])
-const lastPlayerText = computed(() => store.game?.state?.last_player_name ? `${store.game.state.last_player_name} · 最近出牌` : '本轮由你开始')
+const lastPlayerText = computed(() => store.game?.state?.last_action_text || (store.game?.state?.last_player_name ? `${store.game.state.last_player_name} · 最近出牌` : '本轮由你开始'))
+const turnText = computed(() => {
+  if (store.game?.winner) return '牌局已结束'
+  const index = store.game?.state?.current_player_index || 0
+  return index === 0 ? '轮到你出牌' : `轮到 AI-${index}`
+})
 const playerCount = name => store.game?.players?.find(player => player.name === name)?.hand_count ?? 27
 const back = () => uni.navigateBack()
 const toast = title => uni.showToast({ title, icon: 'none' })
