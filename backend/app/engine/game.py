@@ -4,6 +4,7 @@ from .card import Card
 from .deck import Deck
 from .player import Player
 from .round import Round
+from .rulebook import Rulebook
 from .state import GameState
 from .turn import Turn
 
@@ -29,7 +30,7 @@ class Game:
         for index, name in enumerate(self.player_names):
             team_id = 0 if index < 2 else 1
             self.players.append(Player(name=name, team_id=team_id, is_human=(index == 0)))
-        self.deck.deal_to_players(self.players, cards_per_player=27)
+        self.deck.deal_to_players(self.players, cards_per_player=Rulebook.CARDS_PER_PLAYER)
         self.current_round = Round(self.players)
         self.round_number = 1
         self.phase = "ready"

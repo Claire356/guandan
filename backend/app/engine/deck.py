@@ -2,6 +2,7 @@ import random
 from typing import List
 
 from .card import Card
+from .rulebook import Rulebook
 
 
 class Deck:
@@ -59,8 +60,16 @@ class Deck:
             raise ValueError("牌堆已空")
         return self.cards.pop(0)
 
-    def deal_to_players(self, players, cards_per_player: int = 27) -> None:
-        """将牌平均发给所有玩家。"""
+    def deal_to_players(self, players, cards_per_player: int = Rulebook.CARDS_PER_PLAYER) -> None:
+        """将全部 108 张牌平均发给四家；掼蛋没有底牌。"""
+        if len(players) != Rulebook.PLAYER_COUNT:
+            raise ValueError("掼蛋必须由四名玩家参与")
+        if cards_per_player != Rulebook.CARDS_PER_PLAYER:
+            raise ValueError("掼蛋开局每位玩家必须发 27 张牌")
+        if len(self.cards) != Rulebook.TOTAL_CARD_COUNT:
+            raise ValueError("发牌前牌堆必须包含完整的 108 张牌")
         for _ in range(cards_per_player):
             for player in players:
                 player.receive_cards([self.draw()])
+        if self.cards:
+            raise RuntimeError("发牌后不应存在底牌")
