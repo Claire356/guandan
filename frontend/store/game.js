@@ -41,7 +41,13 @@ export const useGameStore = defineStore('game', {
         this.game = {
           phase: 'ready', round_number: 1,
           players: ['你', 'AI-1', 'AI-2', 'AI-3'].map((name, index) => ({ name, hand_count: 27, team_id: index < 2 ? 0 : 1 })),
-          state: { current_player_index: 0, current_turn_count: 0, log: ['离线演示已开始'] }
+          state: {
+            current_player_index: 0,
+            current_turn_count: 0,
+            last_played_cards: [],
+            last_player_name: null,
+            log: ['离线演示已开始']
+          }
         }
       } finally {
         this.loading = false
@@ -59,8 +65,16 @@ export const useGameStore = defineStore('game', {
         this.game = response.game
         this.hand = response.game.current_hand || []
       } else {
+        // 离线演示同样要保存本次牌面，否则手牌虽被移除，桌面仍会一直显示“等待首出”。
+        const playedCards = this.selectedCards
         const used = new Set(this.selectedIndices)
         this.hand = this.hand.filter((_, index) => !used.has(index))
+        this.game.state.last_played_cards = playedCards
+        this.game.state.last_player_name = '你'
+        this.game.state.current_turn_count += 1
+        this.game.state.log.push(`你出了 ${playedCards.join(' ')}`)
+        const human = this.game.players.find(player => player.name === '你')
+        if (human) human.hand_count = this.hand.length
       }
       this.selectedIndices = []
       return true
