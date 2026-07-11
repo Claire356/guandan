@@ -1,0 +1,17 @@
+{
+  "name": "ai-guandan-training-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'Please run this project in HBuilderX or UniApp CLI'",
+    "build": "echo 'Build placeholder'"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "pinia": "^2.1.0",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}
