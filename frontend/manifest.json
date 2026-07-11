@@ -1,0 +1,22 @@
+{
+  "name": "AI掼蛋训练",
+  "appid": "__UNI__AIGUANDAN",
+  "description": "规则AI驱动的掼蛋训练应用",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "h5": {
+    "title": "AI掼蛋训练",
+    "router": {
+      "mode": "history",
+      "base": "/"
+    },
+    "devServer": {
+      "https": false
+    }
+  },
+  "mp-weixin": {
+    "appid": "",
+    "setting": { "urlCheck": false }
+  }
+}

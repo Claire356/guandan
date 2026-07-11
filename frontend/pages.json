@@ -1,10 +1,24 @@
 {
-  "pages": [
-    {
-      "path": "pages/index/index",
-      "style": {
-        "navigationBarTitleText": "AI掼蛋训练"
-      }
+  "easycom": {
+    "autoscan": true,
+    "custom": {
+      "^u-(.*)": "uview-plus/components/u-$1/u-$1.vue"
     }
-  ]
+  },
+  "pages": [
+    { "path": "pages/index/index", "style": { "navigationBarTitleText": "AI掼蛋训练" } },
+    { "path": "pages/training/index", "style": { "navigationBarTitleText": "开始训练" } },
+    { "path": "pages/game/index", "style": { "navigationBarTitleText": "训练牌桌", "navigationStyle": "custom" } },
+    { "path": "pages/recommend/index", "style": { "navigationBarTitleText": "AI推荐" } },
+    { "path": "pages/settlement/index", "style": { "navigationBarTitleText": "本局结算" } },
+    { "path": "pages/report/index", "style": { "navigationBarTitleText": "AI报告" } },
+    { "path": "pages/history/index", "style": { "navigationBarTitleText": "历史记录" } },
+    { "path": "pages/not-found/index", "style": { "navigationBarTitleText": "页面未找到" } }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "AI掼蛋训练",
+    "navigationBarBackgroundColor": "#0b5d3b",
+    "backgroundColor": "#eef4ef"
+  }
 }

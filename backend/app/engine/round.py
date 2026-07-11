@@ -43,7 +43,6 @@ class Round:
             is_upgrade = False
             is_follow = False
         else:
-            previous_pattern = self._detect_pattern(self.last_played_cards)
             if not self._is_valid_against_previous(pattern, self.last_played_cards, cards):
                 return Turn(player, cards, pattern, False, "牌型或牌值不满足压制条件")
             is_upgrade = True

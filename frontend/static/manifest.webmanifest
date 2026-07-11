@@ -1,0 +1,16 @@
+{
+  "name": "AI 掼蛋训练",
+  "short_name": "掼蛋训练",
+  "description": "AI 掼蛋规则训练、决策推荐与行为复盘",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#eef4ef",
+  "theme_color": "#0b5d3b",
+  "icons": [
+    { "src": "/icons/app-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

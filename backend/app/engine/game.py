@@ -69,13 +69,13 @@ class Game:
             self.state.add_log(f"{player.name} 出牌: {', '.join(str(card) for card in cards)}")
         return turn
 
-    def handle_contribution(self, from_player: Player, cards: List[Player]) -> None:
+    def handle_contribution(self, from_player: Player, cards: List[Card]) -> None:
         """处理进贡逻辑。"""
         if not cards:
             raise ValueError("进贡牌不能为空")
         from_player.give_contribution(cards)
 
-    def handle_return_contribution(self, from_player: Player, cards: List[Player]) -> None:
+    def handle_return_contribution(self, from_player: Player, cards: List[Card]) -> None:
         """处理还贡逻辑。"""
         if not cards:
             raise ValueError("还贡牌不能为空")

@@ -19,21 +19,10 @@ class Player:
 
     def play_cards(self, cards: List[Card]) -> None:
         """出牌，要求牌必须存在于手牌中。"""
+        if not self.has_cards(cards):
+            raise ValueError(f"{self.name} 手中没有指定的牌")
         for card in cards:
-            if card not in self.hand:
-                raise ValueError(f"{self.name} 手中没有这张牌: {card}")
-
-        new_hand = []
-        for card in self.hand:
-            if card in cards:
-                remaining = cards.copy()
-                try:
-                    remaining.remove(card)
-                except ValueError:
-                    pass
-                continue
-            new_hand.append(card)
-        self.hand = new_hand
+            self.hand.remove(card)
 
     def has_cards(self, cards: List[Card]) -> bool:
         """判断是否拥有待出的牌。"""
@@ -53,18 +42,16 @@ class Player:
 
     def return_contribution(self, cards: List[Card]) -> None:
         """还贡：把贡牌重新回到手牌。"""
+        contribution_copy = list(self.contributions)
         for card in cards:
-            if card not in self.contributions:
+            if card not in contribution_copy:
                 raise ValueError(f"{self.name} 没有这张贡牌: {card}")
-        self.contributions = [card for card in self.contributions if card not in cards]
+            contribution_copy.remove(card)
+        self.contributions = contribution_copy
         self.receive_cards(cards)
 
-    def upgrade(self) -> None:
-        """升级规则占位：后续可扩展为具体的升级判断。"""
-        pass
-
     def follow_partner(self, cards: List[Card]) -> None:
-        """逢人配规则占位：后续可扩展为具体的配牌判断。"""
+        """按指定牌列表完成配牌出牌。"""
         if not self.has_cards(cards):
             raise ValueError(f"{self.name} 无法完成逢人配")
         self.play_cards(cards)

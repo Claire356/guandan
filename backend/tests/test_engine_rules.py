@@ -12,7 +12,6 @@ class EngineRulesTests(unittest.TestCase):
     def test_ai_agent_can_choose_cards(self):
         player = Player("AI")
         ai = AIAgent(player)
-        cards = [player] if False else []
         self.assertEqual(ai.choose_cards([]), [])
 
     def test_game_exposes_rulebook_context(self):

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b5d3b" />
+    <meta name="description" content="AI 掼蛋规则训练、决策推荐与行为复盘" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="AI掼蛋训练" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/app-icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/app-icon-192.png" />
+    <title>AI掼蛋训练</title>
+    <style>
+      html, body { margin: 0; min-height: 100%; background: #eef4ef; }
+      #app-loading { position: fixed; inset: 0; z-index: 99999; display: flex; align-items: center; justify-content: center; background: linear-gradient(145deg, #073d29, #0b6b45); color: #fff; transition: opacity .24s ease; }
+      #app-loading.app-loading--hidden { opacity: 0; pointer-events: none; }
+      .launch-content { display: flex; flex-direction: column; align-items: center; gap: 18px; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+      .launch-logo { width: 72px; height: 72px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.35); border-radius: 22px; color: #ecd078; background: rgba(255,255,255,.1); font-size: 38px; font-weight: 900; }
+      .launch-title { font-size: 20px; font-weight: 700; letter-spacing: 2px; }
+      .launch-spinner { width: 26px; height: 26px; border: 3px solid rgba(255,255,255,.24); border-top-color: #fff; border-radius: 50%; animation: launch-spin .8s linear infinite; }
+      @keyframes launch-spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <div id="app-loading" role="status" aria-label="应用加载中">
+      <div class="launch-content"><div class="launch-logo">♠</div><div class="launch-title">AI 掼蛋训练</div><div class="launch-spinner"></div></div>
+    </div>
+    <div id="app"></div>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
