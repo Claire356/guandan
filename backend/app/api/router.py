@@ -43,6 +43,16 @@ def _game_payload(game: Game) -> dict:
     payload = game.to_dict()
     player = _current_player(game)
     payload["current_hand"] = [card.to_dict() for card in player.hand]
+    round_obj = game.current_round
+    # 返回最近一轮四家的桌面动作，让前端同时展示各座位出牌，而非只展示最后一手。
+    payload["state"]["table_plays"] = [] if round_obj is None else [
+        {
+            "player": turn.player.name,
+            "cards": [card.to_dict() for card in turn.cards],
+            "is_pass": turn.is_pass,
+        }
+        for turn in round_obj.turn_history[-4:]
+    ]
     return payload
 
 

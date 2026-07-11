@@ -10,10 +10,15 @@
       <view class="player top"><view class="avatar">AI</view><text>AI-2</text><text class="count">{{ playerCount('AI-2') }}张</text></view>
       <view class="player left"><view class="avatar">AI</view><text>AI-1</text><text class="count">{{ playerCount('AI-1') }}张</text></view>
       <view class="player right"><view class="avatar">AI</view><text>AI-3</text><text class="count">{{ playerCount('AI-3') }}张</text></view>
+      <view v-for="name in playerNames" :key="name" class="table-play" :class="playPosition[name]">
+        <view v-if="actionFor(name)?.cards?.length" class="play-cards">
+          <PlayingCard v-for="(card,index) in actionFor(name).cards" :key="`${name}-${index}`" :card="card" disabled />
+        </view>
+        <text v-else-if="actionFor(name)?.is_pass" class="pass-mark">PASS</text>
+      </view>
       <view class="desk-center">
-        <text class="desk-label">当前牌面</text>
-        <view v-if="tableCards.length" class="played"><PlayingCard v-for="(card,index) in tableCards" :key="index" :card="card" disabled /></view>
-        <text v-else class="empty-desk">等待首出</text>
+        <text class="desk-label">本轮牌桌</text>
+        <text v-if="!tableActions.length" class="empty-desk">等待首出</text>
         <text class="last-play">{{ lastPlayerText }}</text>
       </view>
       <view class="turn-pill">{{ turnText }}</view>
@@ -41,7 +46,10 @@ import { computed } from 'vue'
 import { useGameStore } from '@/store/game'
 import PlayingCard from '@/components/PlayingCard.vue'
 const store = useGameStore()
-const tableCards = computed(() => store.game?.state?.last_played_cards || [])
+const tableActions = computed(() => store.game?.state?.table_plays || [])
+const playerNames = ['你', 'AI-1', 'AI-2', 'AI-3']
+const playPosition = { '你': 'bottom-play', 'AI-1': 'left-play', 'AI-2': 'top-play', 'AI-3': 'right-play' }
+const actionFor = name => [...tableActions.value].reverse().find(action => action.player === name)
 const lastPlayerText = computed(() => store.game?.state?.last_action_text || (store.game?.state?.last_player_name ? `${store.game.state.last_player_name} · 最近出牌` : '本轮由你开始'))
 const turnText = computed(() => {
   if (store.game?.winner) return '牌局已结束'
@@ -63,7 +71,9 @@ const finish = () => { store.finishDemo(); uni.navigateTo({ url: '/pages/settlem
 .game-table { position: relative; height: 670rpx; margin: 0 18rpx; overflow: hidden; border: 2rpx solid rgba(216,182,91,.42); border-radius: 42rpx; background: radial-gradient(circle, #168257 0, #0e6b47 60%, #09553a 100%); box-shadow: inset 0 0 70rpx rgba(0,0,0,.2); }
 .player { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 4rpx; font-size: 23rpx; }.player.top { top: 24rpx; left: 50%; transform: translateX(-50%); }.player.left { left: 20rpx; top: 250rpx; }.player.right { right: 20rpx; top: 250rpx; }
 .avatar { width: 72rpx; height: 72rpx; display: flex; align-items: center; justify-content: center; border: 3rpx solid rgba(255,255,255,.65); border-radius: 50%; background: #164d38; font-size: 23rpx; font-weight: 800; }.count { font-size: 20rpx; color: rgba(255,255,255,.65); }
-.desk-center { position: absolute; left: 50%; top: 47%; transform: translate(-50%,-50%); text-align: center; }.desk-label,.last-play { display: block; font-size: 22rpx; color: rgba(255,255,255,.68); }.played { max-width:360rpx; display: flex; justify-content: center; gap: 6rpx; margin: 16rpx 0; }.empty-desk { display:block; margin:38rpx 0; color:rgba(255,255,255,.55); font-size:25rpx; }
+.desk-center { position: absolute; left: 50%; top: 49%; transform: translate(-50%,-50%); text-align: center; }.desk-label,.last-play { display: block; font-size: 22rpx; color: rgba(255,255,255,.68); }.empty-desk { display:block; margin:18rpx 0; color:rgba(255,255,255,.55); font-size:25rpx; }
+.table-play { position:absolute; z-index:2; min-width:90rpx; min-height:74rpx; display:flex; align-items:center; justify-content:center; }.top-play { top:120rpx; left:50%; transform:translateX(-50%); }.left-play { left:105rpx; top:285rpx; }.right-play { right:105rpx; top:285rpx; }.bottom-play { bottom:92rpx; left:50%; transform:translateX(-50%); }
+.play-cards { display:flex; justify-content:center; }.play-cards :deep(.card) { width:54rpx; height:78rpx; flex-basis:54rpx; padding:6rpx; margin-left:-16rpx; border-radius:7rpx; }.play-cards :deep(.card:first-child) { margin-left:0; }.play-cards :deep(.card__label) { font-size:20rpx; }.play-cards :deep(.card__suit) { margin-top:4rpx; font-size:18rpx; }.pass-mark { padding:6rpx 12rpx; border-radius:10rpx; background:rgba(0,0,0,.2); color:rgba(255,255,255,.72); font-size:21rpx; font-weight:700; }
 .turn-pill { position: absolute; bottom: 28rpx; left: 50%; transform: translateX(-50%); padding: 10rpx 26rpx; border-radius: 99rpx; color: #3d3216; background: #e4c66d; font-size: 24rpx; font-weight: 700; }
 .hand-panel { margin-top: -12rpx; padding: 28rpx 24rpx 22rpx; border-radius: 30rpx 30rpx 0 0; background: #f3f7f4; color: #18372a; }.hand-title { font-weight: 800; }
 .hand-scroll { width: 100%; height: 164rpx; margin-top: 24rpx; }.hand-row { min-width: max-content; display: flex; gap: 7rpx; padding: 22rpx 4rpx; }
