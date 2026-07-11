@@ -29,7 +29,7 @@ ai-guandan-training/
 │   ├── main.py                  # backend.main 兼容入口
 │   └── requirements.txt
 ├── frontend/
-│   ├── api/                     # Axios 请求封装
+│   ├── services/                # Axios 请求封装
 │   ├── components/              # 公共 UI 组件
 │   ├── pages/                   # 七个 UniApp 页面
 │   ├── store/                   # Pinia 状态

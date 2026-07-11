@@ -46,6 +46,25 @@ def _game_payload(game: Game) -> dict:
     return payload
 
 
+def _run_ai_until_human(game: Game) -> None:
+    """自动推进 AI 回合，直到重新轮到真人或牌局结束。"""
+    round_obj = game.current_round
+    if round_obj is None:
+        return
+
+    # 正常情况下最多连续行动三名 AI；保留上限可避免损坏状态造成无限循环。
+    for _ in range(12):
+        if game.winner is not None:
+            return
+        player = round_obj.players[round_obj.current_player_index]
+        if player.is_human:
+            return
+        turn = Balanced(game, player).play()
+        if not turn.is_valid:
+            raise RuntimeError(f"AI 出牌失败: {turn.message}")
+    raise RuntimeError("AI 回合推进超过安全上限")
+
+
 @router.post("/start_game", response_model=GameResponse)
 def start_game(request: StartGameRequest) -> GameResponse:
     """创建并启动一局新的内存游戏。"""
@@ -71,6 +90,7 @@ def play(request: PlayRequest) -> ActionResponse:
     if not turn.is_valid:
         raise HTTPException(status_code=400, detail=turn.message)
     game.check_winner()
+    _run_ai_until_human(game)
     return ActionResponse(turn=turn.to_dict(), game=_game_payload(game))
 
 
@@ -89,6 +109,7 @@ def pass_turn() -> ActionResponse:
         round_obj.last_played_cards = None
         round_obj.last_player = None
         round_obj.phase = "waiting"
+    _run_ai_until_human(game)
     return ActionResponse(turn=turn.to_dict(), game=_game_payload(game))
 
 

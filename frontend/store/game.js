@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import * as gameApi from '@/api/game'
+import * as gameApi from '@/services/game'
 
 const demoCards = ['♠3', '♥3', '♣4', '♦5', '♠6', '♥7', '♣8', '♦9', '♠10', '♥J', '♣Q', '♦K', '♠A', '♥2']
 
