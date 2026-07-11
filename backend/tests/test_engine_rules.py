@@ -6,8 +6,23 @@ from backend.app.engine import AIAgent, Game, Player, Rulebook
 class EngineRulesTests(unittest.TestCase):
     def test_rulebook_constants(self):
         rulebook = Rulebook()
+        self.assertEqual(rulebook.DECK_COUNT, 2)
+        self.assertEqual(rulebook.CARDS_PER_DECK, 54)
         self.assertEqual(rulebook.PLAYER_COUNT, 4)
+        self.assertEqual(rulebook.TOTAL_CARD_COUNT, 108)
         self.assertEqual(rulebook.CARDS_PER_PLAYER, 27)
+        self.assertEqual(rulebook.BOTTOM_CARD_COUNT, 0)
+        self.assertFalse(rulebook.HAS_BOTTOM_CARDS)
+
+    def test_heart_level_card_is_wild(self):
+        from backend.app.engine import Card
+
+        self.assertTrue(Rulebook.is_wild_card(Card("♥", "7", 7), "7"))
+        self.assertFalse(Rulebook.is_wild_card(Card("♠", "7", 7), "7"))
+
+    def test_tribute_exchange_preserves_total(self):
+        self.assertTrue(Rulebook.exchange_preserves_total([27, 27, 27, 27], [27, 27, 27, 27]))
+        self.assertFalse(Rulebook.exchange_preserves_total([27, 27, 27, 27], [26, 27, 27, 27]))
 
     def test_ai_agent_can_choose_cards(self):
         player = Player("AI")

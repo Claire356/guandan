@@ -20,6 +20,7 @@ class GuandanEngineTests(unittest.TestCase):
         game.start_new_game()
         for player in game.players:
             self.assertEqual(len(player.hand), 27)
+        self.assertEqual(len(game.deck.cards), 0)
 
     def test_round_can_accept_single_card_play(self):
         game = Game(player_names=["你", "AI-1", "AI-2", "AI-3"])

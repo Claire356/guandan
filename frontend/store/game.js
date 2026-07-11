@@ -1,7 +1,21 @@
 import { defineStore } from 'pinia'
 import * as gameApi from '@/services/game'
 
-const demoCards = ['♠3', '♥3', '♣4', '♦5', '♠6', '♥7', '♣8', '♦9', '♠10', '♥J', '♣Q', '♦K', '♠A', '♥2']
+// 离线模式同样严格使用两副牌：2 × 54 = 108 张，轮流发给四家，每家 27 张且无底牌。
+const buildOfflineDeal = () => {
+  const suits = ['♠', '♥', '♣', '♦']
+  const ranks = ['3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A', '2']
+  const deck = []
+  for (let copy = 0; copy < 2; copy += 1) {
+    suits.forEach(suit => ranks.forEach(rank => deck.push(`${suit}${rank}`)))
+    deck.push('🃏小王', '🃏大王')
+  }
+  const hands = [[], [], [], []]
+  deck.forEach((card, index) => hands[index % 4].push(card))
+  return hands
+}
+const offlineDeal = buildOfflineDeal()
+const demoCards = offlineDeal[0]
 const rankLevel = { 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10, J: 11, Q: 12, K: 13, A: 14, 2: 15 }
 const cardRank = card => String(card).slice(1)
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
@@ -46,9 +60,9 @@ export const useGameStore = defineStore('game', {
       } catch (error) {
         this.offlineDemo = true
         this.offlineAiHands = {
-          'AI-1': [...demoCards.slice(2), ...demoCards.slice(0, 2)],
-          'AI-2': [...demoCards.slice(4), ...demoCards.slice(0, 4)],
-          'AI-3': [...demoCards.slice(6), ...demoCards.slice(0, 6)]
+          'AI-1': [...offlineDeal[1]],
+          'AI-2': [...offlineDeal[2]],
+          'AI-3': [...offlineDeal[3]]
         }
         this.game = {
           phase: 'ready', round_number: 1,
