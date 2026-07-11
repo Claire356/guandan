@@ -23,6 +23,13 @@ const offlineDeal = buildOfflineDeal()
 const demoCards = offlineDeal[0]
 const rankLevel = { 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10, J: 11, Q: 12, K: 13, A: 14, 2: 15, 小王: 16, 大王: 17 }
 const cardRank = card => String(card).slice(1)
+const suitLevel = { '♠': 0, '♥': 1, '♣': 2, '♦': 3, '🃏': 4 }
+const cardSuit = card => typeof card === 'string' ? card.slice(0, 1) : (card.suit === 'Joker' ? '🃏' : card.suit)
+const normalizedRank = card => typeof card === 'string' ? cardRank(card) : card.rank
+const sortCards = cards => [...cards].sort((first, second) => (
+  (rankLevel[normalizedRank(first)] || first.value || 0) - (rankLevel[normalizedRank(second)] || second.value || 0)
+  || (suitLevel[cardSuit(first)] ?? 9) - (suitLevel[cardSuit(second)] ?? 9)
+))
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
 
 const groupCards = cards => {
@@ -134,20 +141,20 @@ export const useGameStore = defineStore('game', {
       this.selectedIndices = []
       this.recommendation = []
       this.recommendationIndices = []
-      this.hand = [...newOfflineDeal[0]]
+      this.hand = sortCards(newOfflineDeal[0])
       this.offlineAiHands = {}
       this.aiThinking = false
       try {
         const response = await gameApi.startGame(['你', 'AI-1', 'AI-2', 'AI-3'])
         this.game = response.game
-        this.hand = response.game.current_hand || []
+        this.hand = sortCards(response.game.current_hand || [])
         this.offlineDemo = false
       } catch (error) {
         this.offlineDemo = true
         this.offlineAiHands = {
-          'AI-1': [...newOfflineDeal[1]],
-          'AI-2': [...newOfflineDeal[2]],
-          'AI-3': [...newOfflineDeal[3]]
+          'AI-1': sortCards(newOfflineDeal[1]),
+          'AI-2': sortCards(newOfflineDeal[2]),
+          'AI-3': sortCards(newOfflineDeal[3])
         }
         this.game = {
           phase: 'ready', round_number: 1,
@@ -158,6 +165,7 @@ export const useGameStore = defineStore('game', {
             last_played_cards: [],
             last_player_name: null,
             last_action_text: '本轮由你开始',
+            table_plays: [],
             log: ['离线演示已开始']
           }
         }
@@ -176,7 +184,7 @@ export const useGameStore = defineStore('game', {
       if (!this.offlineDemo) {
         const response = await gameApi.playCards(this.selectedIndices)
         this.game = response.game
-        this.hand = response.game.current_hand || []
+        this.hand = sortCards(response.game.current_hand || [])
       } else {
         // 离线演示同样要保存本次牌面，否则手牌虽被移除，桌面仍会一直显示“等待首出”。
         const playedCards = this.selectedCards
@@ -187,6 +195,7 @@ export const useGameStore = defineStore('game', {
         this.game.state.last_played_cards = playedCards
         this.game.state.last_player_name = '你'
         this.game.state.last_action_text = `你出了 ${playedCards.join(' ')}`
+        this.game.state.table_plays = [{ player: '你', cards: playedCards, is_pass: false }]
         this.game.state.current_turn_count += 1
         this.game.state.log.push(`你出了 ${playedCards.join(' ')}`)
         const human = this.game.players.find(player => player.name === '你')
@@ -216,11 +225,13 @@ export const useGameStore = defineStore('game', {
             this.game.state.last_played_cards = responseCards
             this.game.state.last_player_name = name
             this.game.state.last_action_text = `${name} 出了 ${responseCards.join(' ')}`
+            this.game.state.table_plays.push({ player: name, cards: [...responseCards], is_pass: false })
             const player = this.game.players.find(item => item.name === name)
             if (player) player.hand_count = aiHand.length
             this.game.state.log.push(`${name} 出了 ${responseCards.join(' ')}`)
           } else {
             this.game.state.last_action_text = `${name} · PASS`
+            this.game.state.table_plays.push({ player: name, cards: [], is_pass: true })
             this.game.state.log.push(`${name} 选择 PASS`)
           }
           this.game.state.current_turn_count += 1
@@ -236,9 +247,10 @@ export const useGameStore = defineStore('game', {
       if (!this.offlineDemo) {
         const response = await gameApi.passTurn()
         this.game = response.game
-        this.hand = response.game.current_hand || []
+        this.hand = sortCards(response.game.current_hand || [])
       } else if ((this.game.state.last_played_cards || []).length) {
         this.game.state.last_action_text = '你 · PASS'
+        this.game.state.table_plays = [{ player: '你', cards: [], is_pass: true }]
         this.game.state.log.push('你选择 PASS')
         this.game.state.current_turn_count += 1
         await this.runOfflineAiTurns()

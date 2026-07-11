@@ -31,6 +31,10 @@ class Game:
             team_id = 0 if index < 2 else 1
             self.players.append(Player(name=name, team_id=team_id, is_human=(index == 0)))
         self.deck.deal_to_players(self.players, cards_per_player=Rulebook.CARDS_PER_PLAYER)
+        # 手牌按点数、花色稳定排序；API 返回顺序与实际手牌顺序一致，出牌下标不会错位。
+        suit_order = {"♠": 0, "♥": 1, "♣": 2, "♦": 3, "Joker": 4}
+        for player in self.players:
+            player.hand.sort(key=lambda card: (card.value, suit_order.get(card.suit, 9), card.color or ""))
         self.current_round = Round(self.players)
         self.round_number = 1
         self.phase = "ready"
