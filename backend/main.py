@@ -1,8 +1,6 @@
-from fastapi import FastAPI
+"""兼容入口：推荐使用 ``uvicorn app.main:app`` 从 backend 目录启动。"""
 
-app = FastAPI(title="AI掼蛋训练 API")
+from .app.main import app
 
 
-@app.get("/health")
-def health_check():
-    return {"status": "ok"}
+__all__ = ["app"]

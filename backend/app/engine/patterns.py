@@ -1,7 +1,5 @@
 from typing import List
 
-from .card import Card
-
 
 class PatternRegistry:
     """牌型枚举与规则辅助。"""
