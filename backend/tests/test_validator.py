@@ -64,7 +64,8 @@ class ValidatorTests(unittest.TestCase):
         current = table([3, 3, 3, 4, 4])
         moves = get_all_legal_moves(hand, current)
         self.assertTrue(moves)
-        self.assertTrue(all(validate_play(hand, current, move)["valid"] for move in moves))
+        self.assertIn([], moves)
+        self.assertTrue(all(validate_play(hand, current, move)["valid"] for move in moves if move))
         self.assertTrue(any(identify_card_type(move)["type"] == "triple_with_pair" and identify_card_type(move)["level"] == 4 for move in moves))
     def test_34_get_all_legal_moves_logs_compare_and_pass(self):
         with self.assertLogs("backend.app.engine.move_generator", level="DEBUG") as captured:
