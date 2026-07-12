@@ -123,6 +123,10 @@ class Game:
             self.state.current_player_index = self.current_round.current_player_index
             self.state.last_played_cards = list(cards)
             self.state.last_player_name = player.name
+            self.state.consecutive_passes = 0
+            self.state.power_holder_name = None
+            self.state.power_transfer = None
+            self.state.trick_number = self.current_round.trick_number
             self.state.add_log(f"{player.name} 出牌: {', '.join(str(card) for card in cards)}")
             if not player.hand:
                 # 玩家出完后由交叉座位的队友接风；队友也已出完才轮到下一名对手。
@@ -140,10 +144,35 @@ class Game:
                 self.current_round.last_card_type = None
                 self.current_round.last_player = None
                 self.current_round.phase = "waiting"
+                self.current_round.pass_counter.reset_round()
+                self.current_round.power_state.on_power_transfer()
                 self.state.current_player_index = self.current_round.current_player_index
                 self.state.last_played_cards = None
                 self.state.last_player_name = None
                 self.state.add_log(f"{player.name} 出完手牌，进入接风")
+        return turn
+
+    def pass_turn(self, player: Player) -> Turn:
+        """统一执行 PASS，并在第三家 PASS 后同步牌权交接状态。"""
+        if self.current_round is None:
+            raise ValueError("当前没有可用回合对象")
+        turn = self.current_round.play_turn(player, [], is_pass=True)
+        if not turn.is_valid:
+            return turn
+        self.state.current_player_index = self.current_round.current_player_index
+        self.state.current_turn_count += 1
+        self.state.consecutive_passes = self.current_round.pass_counter.consecutive_passes
+        self.state.trick_number = self.current_round.trick_number
+        self.state.add_log(f"{player.name} 选择PASS")
+        transfer = self.current_round.last_power_transfer
+        if transfer:
+            self.state.last_played_cards = None
+            self.state.last_player_name = None
+            self.state.power_holder_name = transfer["player_name"]
+            self.state.power_transfer = dict(transfer)
+            self.state.add_log(f"三家连续PASS，牌权交还给{transfer['player_name']}")
+        else:
+            self.state.power_transfer = None
         return turn
 
     def handle_contribution(self, from_player: Player, cards: List[Card]) -> None:

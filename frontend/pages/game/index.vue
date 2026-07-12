@@ -11,7 +11,7 @@
     <view class="level-banner"><text>当前级牌</text><strong>打{{ currentLevel }}</strong></view>
 
     <view class="game-table">
-      <view v-for="seat in aiSeats" :key="seat.player.name" class="player" :class="seat.position">
+      <view v-for="seat in aiSeats" :key="seat.player.name" class="player" :class="[seat.position,{ 'has-power':powerHolder === seat.player.name }]">
         <image class="avatar-image" :src="seat.player.avatar" mode="aspectFill" />
         <text>{{ seat.player.name }}</text><text class="count">{{ seat.player.hand_count }}张</text>
       </view>
@@ -25,6 +25,9 @@
         <text class="desk-label">本轮牌桌</text>
         <text v-if="!tableActions.length" class="empty-desk">等待首出</text>
         <text class="last-play">{{ lastPlayerText }}</text>
+      </view>
+      <view v-if="powerTransfer" class="power-transfer-animation">
+        <view class="power-orb">♛</view><text>牌权交接</text><strong>{{ powerTransfer.player_name }}</strong>
       </view>
       <scroll-view v-if="tableActions.length" scroll-y class="played-history" :scroll-top="historyScrollTop">
         <view
@@ -122,6 +125,8 @@ onBeforeUnmount(() => {
 })
 const tableActions = computed(() => store.game?.state?.table_plays || [])
 const currentLevel = computed(() => store.game?.currentLevel || store.game?.state?.current_level || '2')
+const powerTransfer = computed(() => store.game?.state?.power_transfer || null)
+const powerHolder = computed(() => store.game?.state?.power_holder_name || null)
 const historyScrollTop = computed(() => tableActions.value.length * 120)
 const playerNames = computed(() => (store.game?.players || []).map(player => player.name))
 const aiSeats = computed(() => {
@@ -159,6 +164,10 @@ const finish = () => { store.finishDemo(); uni.navigateTo({ url: '/pages/settlem
 .level-banner { width:210rpx; margin:0 auto 12rpx; padding:8rpx 18rpx; display:flex; justify-content:space-between; align-items:center; border:1rpx solid rgba(244,214,111,.55); border-radius:99rpx; background:rgba(0,0,0,.14); font-size:21rpx; }.level-banner strong { color:#f4d66f; font-size:27rpx; }
 .game-table { position: relative; height: 670rpx; margin: 0 18rpx; overflow: hidden; border: 2rpx solid rgba(216,182,91,.42); border-radius: 42rpx; background: radial-gradient(circle, #168257 0, #0e6b47 60%, #09553a 100%); box-shadow: inset 0 0 70rpx rgba(0,0,0,.2); }
 .player { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 4rpx; font-size: 23rpx; }.player.top { top: 24rpx; left: 50%; transform: translateX(-50%); }.player.left { left: 20rpx; top: 250rpx; }.player.right { right: 20rpx; top: 250rpx; }
+.player.has-power .avatar-image { border-color:#ffd86a; box-shadow:0 0 28rpx rgba(255,216,106,.9); animation:power-glow 1.5s ease-in-out infinite; }
+.power-transfer-animation { position:absolute; z-index:8; left:50%; top:42%; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; padding:18rpx 28rpx; border-radius:22rpx; color:#fff; background:rgba(2,48,31,.88); box-shadow:0 0 36rpx rgba(255,216,106,.6); animation:power-appear .45s ease-out; }.power-transfer-animation .power-orb { width:66rpx; height:66rpx; display:flex; align-items:center; justify-content:center; border-radius:50%; color:#684c00; background:radial-gradient(circle,#fff1a8,#ffb51f); box-shadow:0 0 28rpx #ffd86a; font-size:34rpx; }.power-transfer-animation text { margin-top:10rpx; color:#ffd86a; font-size:21rpx; }.power-transfer-animation strong { margin-top:4rpx; font-size:27rpx; }
+@keyframes power-appear { from { opacity:0; transform:translate(-50%,-50%) scale(.55); } to { opacity:1; transform:translate(-50%,-50%) scale(1); } }
+@keyframes power-glow { 50% { box-shadow:0 0 48rpx rgba(255,216,106,1); } }
 .avatar-image { width:72rpx; height:72rpx; border:3rpx solid rgba(255,255,255,.78); border-radius:50%; background:#164d38; box-shadow:0 6rpx 18rpx rgba(0,0,0,.22); }.count { font-size: 20rpx; color: rgba(255,255,255,.65); }
 .desk-center { position: absolute; left: 50%; top: 49%; transform: translate(-50%,-50%); text-align: center; }.desk-label,.last-play { display: block; font-size: 22rpx; color: rgba(255,255,255,.68); }.empty-desk { display:block; margin:18rpx 0; color:rgba(255,255,255,.55); font-size:25rpx; }
 .table-play { position:absolute; z-index:2; min-width:90rpx; min-height:74rpx; display:flex; align-items:center; justify-content:center; }.top-play { top:120rpx; left:50%; transform:translateX(-50%); }.left-play { left:105rpx; top:285rpx; }.right-play { right:105rpx; top:285rpx; }.bottom-play { bottom:92rpx; left:50%; transform:translateX(-50%); }

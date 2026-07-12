@@ -228,17 +228,9 @@ def pass_turn() -> ActionResponse:
     player = _current_player(game)
     thinking_time_ms = (perf_counter() - _last_action_started) * 1000
     previous_player = round_obj.last_player
-    turn = round_obj.play_turn(player, [], is_pass=True)
-    game.state.current_player_index = round_obj.current_player_index
-    game.state.current_turn_count += 1
-    game.state.add_log(f"{player.name} 选择PASS")
-    if len(round_obj.turn_history) >= 3 and all(item.is_pass for item in round_obj.turn_history[-3:]):
-        round_obj.last_played_cards = None
-        round_obj.last_card_type = None
-        round_obj.last_player = None
-        round_obj.phase = "waiting"
-        game.state.last_played_cards = None
-        game.state.last_player_name = None
+    turn = game.pass_turn(player)
+    if not turn.is_valid:
+        raise HTTPException(status_code=400, detail=turn.message)
     if _game_record_id is not None:
         create_behavior_log(
             _game_record_id,

@@ -16,6 +16,10 @@ class GameState:
     log: List[str] = field(default_factory=list)
     current_turn_count: int = 0
     finish_order: List[str] = field(default_factory=list)
+    consecutive_passes: int = 0
+    power_holder_name: Optional[str] = None
+    trick_number: int = 1
+    power_transfer: Optional[dict] = None
 
     def add_log(self, message: str) -> None:
         """追加一条日志。"""
@@ -32,4 +36,8 @@ class GameState:
             "log": self.log,
             "current_turn_count": self.current_turn_count,
             "finish_order": list(self.finish_order),
+            "consecutive_passes": self.consecutive_passes,
+            "power_holder_name": self.power_holder_name,
+            "trick_number": self.trick_number,
+            "power_transfer": self.power_transfer,
         }

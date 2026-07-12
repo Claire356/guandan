@@ -184,20 +184,7 @@ class RuleAIPlayer:
             self.game.check_winner()
             return turn
 
-        # Game.play_turn 没有过牌参数，因此通过其当前 Round 的兼容接口执行过牌。
-        turn = round_obj.play_turn(self.player, [], is_pass=True)
-        self.game.state.current_player_index = round_obj.current_player_index
-        self.game.state.current_turn_count += 1
-        self.game.state.add_log(f"{self.player.name} 选择PASS")
-        # 连续三家过牌后，最后出牌者重新获得主动权，清空桌面进入新墩。
-        if len(round_obj.turn_history) >= 3 and all(item.is_pass for item in round_obj.turn_history[-3:]):
-            round_obj.last_played_cards = None
-            round_obj.last_card_type = None
-            round_obj.last_player = None
-            round_obj.phase = "waiting"
-            self.game.state.last_played_cards = None
-            self.game.state.last_player_name = None
-        return turn
+        return self.game.pass_turn(self.player)
 
 
 class Aggressive(RuleAIPlayer):

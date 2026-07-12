@@ -5,6 +5,7 @@ from .card_type import BOMB, JOKER_BOMB, STRAIGHT_FLUSH, INVALID, compare, ident
 from .player import Player
 from .turn import Turn
 from .validator import validate_play
+from .power_transfer import PassCounter, PowerTransferStateMachine
 
 
 class Round:
@@ -19,6 +20,18 @@ class Round:
         self.last_card_type = None
         self.last_player: Optional[Player] = None
         self.phase = "waiting"
+        self.pass_counter = PassCounter()
+        self.power_state = PowerTransferStateMachine()
+        self.trick_number = 1
+        self.last_power_transfer = None
+
+    def _next_active_player(self, start_index: int) -> int:
+        """按座位顺序寻找下一名仍有手牌的玩家。"""
+        for offset in range(1, len(self.players) + 1):
+            candidate = (start_index + offset) % len(self.players)
+            if self.players[candidate].hand:
+                return candidate
+        return start_index
 
     def play_turn(self, player: Player, cards: List[Card], is_pass: bool = False) -> Turn:
         """执行一次出牌动作。"""
@@ -26,10 +39,35 @@ class Round:
             return Turn(player, cards, "invalid", False, "当前不是该玩家出牌")
 
         if is_pass:
+            if not self.pass_counter.round_active or self.last_played_cards is None:
+                return Turn(player, cards, "invalid", False, "获得牌权的新一轮不能PASS", is_pass=True)
+            passer_index = self.current_player_index
             self.phase = "pass"
             turn = Turn(player, cards, "pass", True, "选择弃牌", is_pass=True)
             self.turn_history.append(turn)
-            self.current_player_index = (self.current_player_index + 1) % len(self.players)
+            should_transfer = self.pass_counter.record_pass()
+            self.power_state.on_pass(should_transfer)
+            if should_transfer:
+                power_index = self.pass_counter.last_play_player_index
+                if power_index is None:
+                    return Turn(player, cards, "invalid", False, "缺少最后出牌者，无法交接牌权", is_pass=True)
+                power_player = self.players[power_index]
+                self.current_player_index = power_index
+                self.last_played_cards = None
+                self.last_card_type = None
+                self.last_player = None
+                self.phase = "waiting"
+                self.trick_number += 1
+                self.last_power_transfer = {
+                    "player_index": power_index,
+                    "player_name": power_player.name,
+                    "trick_number": self.trick_number,
+                }
+                self.pass_counter.reset_round()
+                self.power_state.on_power_transfer()
+            else:
+                self.last_power_transfer = None
+                self.current_player_index = self._next_active_player(passer_index)
             return turn
 
         if not cards:
@@ -69,7 +107,11 @@ class Round:
         self.last_played_cards = list(cards)
         self.last_card_type = chosen_type
         self.last_player = player
-        self.current_player_index = (self.current_player_index + 1) % len(self.players)
+        player_index = self.current_player_index
+        self.pass_counter.record_play(player_index)
+        self.power_state.on_play()
+        self.last_power_transfer = None
+        self.current_player_index = self._next_active_player(player_index)
         return turn
 
     def _detect_pattern(self, cards: List[Card]) -> Optional[str]:
