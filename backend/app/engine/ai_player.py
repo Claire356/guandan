@@ -153,6 +153,16 @@ class RuleAIPlayer:
         card_type = identify_card_type(cards, self.game.state.current_level)
         return (len(cards), int(card_type["level"]))
 
+    def _partner_has_control(self) -> bool:
+        """判断当前桌面最后出牌者是否为自己的对家队友。"""
+        round_obj = self.game.current_round
+        return bool(
+            round_obj
+            and round_obj.last_player
+            and round_obj.last_player is not self.player
+            and round_obj.last_player.team_id == self.player.team_id
+        )
+
     def recommend(self, current_card_type: Optional[CardTypeResult] = None) -> List[Card]:
         """推荐一组牌；没有可压制的牌时返回空列表表示过牌。"""
         if current_card_type is None:
@@ -160,7 +170,25 @@ class RuleAIPlayer:
         candidates = self._legal_candidates(current_card_type)
         if not candidates:
             return []
-        return max(candidates, key=lambda cards: self._score(cards, current_card_type))
+        # 队友掌握牌权时不反压；唯一例外是当前一手可以直接出完，优先完成走牌。
+        if current_card_type is not None and self._partner_has_control():
+            finishing = [cards for cards in candidates if len(cards) == len(self.player.hand)]
+            if not finishing:
+                return []
+            candidates = finishing
+
+        best = max(candidates, key=lambda cards: self._score(cards, current_card_type))
+        # 逢人配能够组成张数更多的非炸弹时优先采用，避免把万能牌长期闲置。
+        wild_candidates = [
+            cards for cards in candidates
+            if any(is_wild_card(card, self.game.state.current_level) for card in cards)
+            and identify_card_type(cards, self.game.state.current_level)["type"] not in BOMB_TYPES
+        ]
+        if wild_candidates:
+            best_wild = max(wild_candidates, key=lambda cards: self._score(cards, current_card_type))
+            if len(best_wild) > len(best):
+                best = best_wild
+        return best
 
     def recommend_with_reason(self) -> dict:
         """输出可解释推荐，同时兼顾队友、炸弹、牌权、残局、级牌与逢人配。"""
@@ -248,8 +276,12 @@ class Aggressive(RuleAIPlayer):
     def _score(self, cards: List[Card], current_card_type: Optional[CardTypeResult]) -> Tuple[int, ...]:
         card_type = identify_card_type(cards, self.game.state.current_level)
         is_bomb = int(card_type["type"] in BOMB_TYPES)
-        # 出牌张数优先，炸弹获得显著奖励，高点数用于积极争夺牌权。
-        return (len(cards) + is_bomb * 5, is_bomb, int(card_type["level"]))
+        opponent_endgame = any(player.team_id != self.player.team_id and len(player.hand) <= 5 for player in self.game.players)
+        bomb_needed = bool(current_card_type and current_card_type["type"] in BOMB_TYPES)
+        bomb_justified = bool(is_bomb and (bomb_needed or len(self.player.hand) <= 8 or opponent_endgame))
+        # 进攻不等于盲目开炸：常规阶段普通合法牌优先，残局、对手报牌或炸弹对抗时才奖励炸弹。
+        resource_priority = 2 if bomb_justified else (0 if is_bomb else 1)
+        return (resource_priority, len(cards), int(card_type["level"]))
 
 
 class Balanced(RuleAIPlayer):
@@ -271,16 +303,6 @@ class Conservative(RuleAIPlayer):
 
     style = "conservative"
 
-    def _partner_has_control(self) -> bool:
-        """判断当前桌面最后出牌者是否为同队队友。"""
-        round_obj = self.game.current_round
-        return bool(
-            round_obj
-            and round_obj.last_player
-            and round_obj.last_player is not self.player
-            and round_obj.last_player.team_id == self.player.team_id
-        )
-
     def choosePass(self, current_card_type: Optional[CardTypeResult] = None) -> bool:
         """队友掌握牌权时主动配合过牌，否则按可压制性判断。"""
         if self._partner_has_control():
@@ -294,7 +316,7 @@ class Conservative(RuleAIPlayer):
         # 常规阶段优先保炸和低成本跟牌；残局优先一次跑出更多牌并取得高牌权。
         if endgame:
             return (1 - is_bomb, len(cards), int(card_type["level"]))
-        return (1 - is_bomb, -int(card_type["level"]), len(cards))
+        return (1 - is_bomb, len(cards), -int(card_type["level"]))
 
 
 __all__ = ["RuleAIPlayer", "Aggressive", "Balanced", "Conservative"]
