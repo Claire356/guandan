@@ -98,3 +98,35 @@ def test_power_transfer_state_machine_cycle():
     assert machine.on_pass(False) == machine.WAITING_FOR_RESPONSE
     assert machine.on_pass(True) == machine.ROUND_END
     assert machine.on_power_transfer() == machine.WAITING_FOR_PLAY
+
+
+def test_finished_player_is_skipped_and_only_active_responders_need_to_pass():
+    players, round_obj = prepared_round()
+    players[1].hand.clear()
+    assert round_obj.play_turn(players[0], [players[0].hand[0]]).is_valid
+    assert round_obj.current_player_index == 2
+    assert round_obj.play_turn(players[2], [], is_pass=True).is_valid
+    assert round_obj.play_turn(players[3], [], is_pass=True).is_valid
+    assert round_obj.current_player_index == 0
+    assert round_obj.last_played_cards is None
+
+
+def test_first_finished_player_does_not_stop_game_and_partner_gets_catch_wind():
+    game = Game(["玩家1", "玩家2", "玩家3", "玩家4"])
+    game.start_new_game()
+    for player in game.players:
+        player.hand.clear()
+    game.players[0].receive_cards([card("3")])
+    game.players[1].receive_cards([card("4")])
+    game.players[2].receive_cards([card("5")])
+    game.players[3].receive_cards([card("6")])
+    game.current_round.current_player_index = 0
+
+    result = game.play_turn(game.players[0], list(game.players[0].hand))
+
+    assert result.is_valid
+    assert game.winner is game.players[0]
+    assert game.phase != "finished"
+    assert game.state.finish_order == ["玩家1"]
+    assert game.current_round.current_player_index == 2
+    assert game.current_round.last_played_cards is None

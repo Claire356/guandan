@@ -144,7 +144,7 @@ const playPosition = computed(() => {
 const actionFor = name => [...tableActions.value].reverse().find(action => action.player === name)
 const lastPlayerText = computed(() => store.game?.state?.last_action_text || (store.game?.state?.last_player_name ? `${store.game.state.last_player_name} · 最近出牌` : '本轮由你开始'))
 const turnText = computed(() => {
-  if (store.game?.winner) return '牌局已结束'
+  if (store.game?.phase === 'finished') return '牌局已结束'
   const index = store.game?.state?.current_player_index || 0
   return index === 0 ? '轮到你出牌' : `轮到 ${store.game?.players?.[index]?.name || 'AI'}出牌`
 })

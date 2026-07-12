@@ -45,7 +45,9 @@ class Round:
             self.phase = "pass"
             turn = Turn(player, cards, "pass", True, "选择弃牌", is_pass=True)
             self.turn_history.append(turn)
-            should_transfer = self.pass_counter.record_pass()
+            # 已经出完牌的玩家不再占用座位响应；四人均在牌局时仍严格为三家 PASS。
+            active_players = sum(bool(item.hand) for item in self.players)
+            should_transfer = self.pass_counter.record_pass(max(1, active_players - 1))
             self.power_state.on_pass(should_transfer)
             if should_transfer:
                 power_index = self.pass_counter.last_play_player_index

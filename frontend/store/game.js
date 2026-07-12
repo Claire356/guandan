@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import * as gameApi from '@/services/game'
+import { nextActivePlayerIndex, recordFinish, requiredPasses } from './turnFlow.mjs'
 
 // 离线模式同样严格使用两副牌：2 × 54 = 108 张，轮流发给四家，每家 27 张且无底牌。
 const buildOfflineDeal = () => {
@@ -215,6 +216,7 @@ export const useGameStore = defineStore('game', {
             current_player_index: 0,
             current_level: '2',
             current_turn_count: 0,
+            finish_order: [],
             last_played_cards: [],
             last_player_name: null,
             last_action_text: '本轮由你开始',
@@ -235,6 +237,27 @@ export const useGameStore = defineStore('game', {
       this.selectedIndices = this.selectedIndices.includes(index)
         ? this.selectedIndices.filter(item => item !== index)
         : [...this.selectedIndices, index]
+    },
+    completeOfflinePlayer(playerIndex) {
+      const nextIndex = recordFinish(this.game, playerIndex)
+      const player = this.game.players[playerIndex]
+      this.game.state.trick_number = (this.game.state.trick_number || 1) + 1
+      this.game.state.consecutive_passes = 0
+      this.game.state.last_played_cards = []
+      this.game.state.last_player_name = null
+      this.game.state.power_transfer = null
+      if (nextIndex === null) {
+        this.game.state.power_holder_name = null
+        this.game.state.last_action_text = '本局结束'
+        this.game.state.log.push(`${player.name}出完手牌，本局结束`)
+        return null
+      }
+      const nextPlayer = this.game.players[nextIndex]
+      this.game.state.current_player_index = nextIndex
+      this.game.state.power_holder_name = nextPlayer.name
+      this.game.state.last_action_text = `${player.name}出完手牌，由${nextPlayer.name}接风`
+      this.game.state.log.push(this.game.state.last_action_text)
+      return nextIndex
     },
     async playSelected() {
       if (!this.selectedIndices.length) throw new Error('请先选择要出的牌')
@@ -264,7 +287,12 @@ export const useGameStore = defineStore('game', {
         const human = this.game.players.find(player => player.name === '你')
         if (human) human.hand_count = this.hand.length
         this.selectedIndices = []
-        this.game.state.current_player_index = 1
+        if (!this.hand.length) {
+          this.completeOfflinePlayer(0)
+          if (this.game.phase === 'finished') return true
+        } else {
+          this.game.state.current_player_index = nextActivePlayerIndex(this.game.players, 0)
+        }
         await this.runOfflineAiTurns()
         return true
       }
@@ -275,6 +303,7 @@ export const useGameStore = defineStore('game', {
       this.aiThinking = true
       try {
         for (let step = 0; step < 12; step += 1) {
+          if (this.game.phase === 'finished') break
           const playerIndex = this.game.state.current_player_index
           if (playerIndex === 0) break
           const name = this.game.players[playerIndex]?.name || `AI-${playerIndex}`
@@ -287,6 +316,7 @@ export const useGameStore = defineStore('game', {
             ? findOfflineResponse(aiHand, tableCards, this.game.state.current_level || '2')
             : aiHand.filter(card => card !== `♥${this.game.state.current_level || '2'}`).slice(0, 1)
 
+          let finishedThisTurn = false
           if (responseCards.length) {
             responseCards.forEach(card => aiHand.splice(aiHand.indexOf(card), 1))
             this.game.state.last_played_cards = responseCards
@@ -299,6 +329,10 @@ export const useGameStore = defineStore('game', {
             const player = this.game.players.find(item => item.name === name)
             if (player) player.hand_count = aiHand.length
             this.game.state.log.push(`${name} 出了 ${responseCards.join(' ')}`)
+            if (!aiHand.length) {
+              this.completeOfflinePlayer(playerIndex)
+              finishedThisTurn = true
+            }
           } else {
             this.game.state.last_action_text = `${name} · PASS`
             this.game.state.table_plays.push({ player: name, cards: [], is_pass: true })
@@ -307,7 +341,10 @@ export const useGameStore = defineStore('game', {
           }
           this.game.state.current_turn_count += 1
           await wait(650)
-          if (!responseCards.length && this.game.state.consecutive_passes >= 3) {
+          if (finishedThisTurn) {
+            continue
+          }
+          if (!responseCards.length && this.game.state.consecutive_passes >= requiredPasses(this.game.players)) {
             const holderName = this.game.state.last_player_name
             const holderIndex = this.game.players.findIndex(player => player.name === holderName)
             this.game.state.trick_number = (this.game.state.trick_number || 1) + 1
@@ -320,7 +357,7 @@ export const useGameStore = defineStore('game', {
             this.game.state.log.push(this.game.state.last_action_text)
             this.game.state.current_player_index = holderIndex >= 0 ? holderIndex : 0
           } else {
-            this.game.state.current_player_index = (playerIndex + 1) % 4
+            this.game.state.current_player_index = nextActivePlayerIndex(this.game.players, playerIndex)
           }
         }
       } finally {
@@ -339,7 +376,7 @@ export const useGameStore = defineStore('game', {
         this.game.state.log.push('你选择 PASS')
         this.game.state.current_turn_count += 1
         this.game.state.consecutive_passes = (this.game.state.consecutive_passes || 0) + 1
-        if (this.game.state.consecutive_passes >= 3) {
+        if (this.game.state.consecutive_passes >= requiredPasses(this.game.players)) {
           const holderName = this.game.state.last_player_name
           const holderIndex = this.game.players.findIndex(player => player.name === holderName)
           this.game.state.trick_number = (this.game.state.trick_number || 1) + 1
@@ -351,7 +388,7 @@ export const useGameStore = defineStore('game', {
           this.game.state.last_action_text = `三家连续PASS，牌权交还给${holderName}`
           this.game.state.current_player_index = holderIndex
         } else {
-          this.game.state.current_player_index = 1
+          this.game.state.current_player_index = nextActivePlayerIndex(this.game.players, 0)
         }
         if (this.game.state.current_player_index !== 0) await this.runOfflineAiTurns()
       } else {

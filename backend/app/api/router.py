@@ -93,7 +93,7 @@ def _run_ai_until_human(game: Game) -> None:
 
     # 正常情况下最多连续行动三名 AI；保留上限可避免损坏状态造成无限循环。
     for _ in range(12):
-        if game.winner is not None:
+        if game.phase == "finished":
             return
         player = round_obj.players[round_obj.current_player_index]
         if player.is_human:

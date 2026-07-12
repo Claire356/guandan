@@ -18,12 +18,14 @@ class PassCounter:
         self.last_play_player_index = player_index
         self.round_active = True
 
-    def record_pass(self) -> bool:
-        """记录 PASS；第三次连续 PASS 返回 True。"""
+    def record_pass(self, required_passes: int = 3) -> bool:
+        """记录 PASS；达到当前仍在牌局中的响应人数后结束本轮。"""
         if not self.round_active:
             return False
+        if required_passes < 1:
+            raise ValueError("结束一轮至少需要一次PASS")
         self.consecutive_passes += 1
-        if self.consecutive_passes >= 3:
+        if self.consecutive_passes >= required_passes:
             self.round_active = False
             return True
         return False

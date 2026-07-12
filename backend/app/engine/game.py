@@ -45,12 +45,18 @@ class Game:
         self.state = GameState(current_level=self.current_level, phase="ready", log=[f"新局开始，当前打{self.current_level}"])
 
     def check_winner(self) -> Optional[Player]:
-        """检查是否有玩家手牌为空，若为空则视为胜负。"""
+        """记录新出完牌的玩家；winner 保留为头游，整局不会因此立即停止。"""
         for player in self.players:
             if not player.hand and player.name not in self.state.finish_order:
                 self.state.finish_order.append(player.name)
                 if self.winner is None:
                     self.winner = player
+                # 三人出完后末游已经确定，无需再让最后一人空跑回合。
+                if len(self.state.finish_order) == len(self.players) - 1:
+                    last_player = next(item for item in self.players if item.name not in self.state.finish_order)
+                    self.state.finish_order.append(last_player.name)
+                    self.phase = "finished"
+                    self.state.phase = "finished"
                 return player
         return None
 
@@ -129,6 +135,9 @@ class Game:
             self.state.trick_number = self.current_round.trick_number
             self.state.add_log(f"{player.name} 出牌: {', '.join(str(card) for card in cards)}")
             if not player.hand:
+                self.check_winner()
+                if self.phase == "finished":
+                    return turn
                 # 玩家出完后由交叉座位的队友接风；队友也已出完才轮到下一名对手。
                 player_index = self.players.index(player)
                 partner_index = (player_index + 2) % len(self.players)
