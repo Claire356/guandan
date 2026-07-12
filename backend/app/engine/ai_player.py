@@ -15,7 +15,8 @@ from .card_type import (
 from .game import Game
 from .player import Player
 from .turn import Turn
-from .validator import get_all_legal_moves, validate_play
+from .move_generator import get_all_legal_moves
+from .validator import validate_play
 
 
 BOMB_TYPES = {BOMB, STRAIGHT_FLUSH, JOKER_BOMB}

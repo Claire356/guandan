@@ -2,7 +2,8 @@ import unittest
 
 from backend.app.engine.card import Card
 from backend.app.engine.card_type import identify_card_type
-from backend.app.engine.validator import get_all_legal_moves, validate_play
+from backend.app.engine.move_generator import get_all_legal_moves
+from backend.app.engine.validator import validate_play
 
 
 SUITS = ["♠", "♥", "♣", "♦"]
@@ -66,7 +67,7 @@ class ValidatorTests(unittest.TestCase):
         self.assertTrue(all(validate_play(hand, current, move)["valid"] for move in moves))
         self.assertTrue(any(identify_card_type(move)["type"] == "triple_with_pair" and identify_card_type(move)["level"] == 4 for move in moves))
     def test_34_get_all_legal_moves_logs_compare_and_pass(self):
-        with self.assertLogs("backend.app.engine.validator", level="DEBUG") as captured:
+        with self.assertLogs("backend.app.engine.move_generator", level="DEBUG") as captured:
             get_all_legal_moves(make_cards([3, 4]), table([4]))
         output = " ".join(captured.output)
         self.assertIn("compare", output)

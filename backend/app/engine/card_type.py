@@ -171,15 +171,20 @@ def _default_strength(result: CardTypeResult) -> Tuple[int, int, int]:
     return priority.get(result["type"], 0), result["level"], result["length"]
 
 
-def identify_card_type(cards: List[Card], current_level: str = "2") -> CardTypeResult:
-    """识别默认最大牌型，接口保持 ``{type, level, length}``。"""
+def recognize(cards: List[Card], current_level: str = "2") -> CardTypeResult:
+    """先展开全部红桃级牌解释，再按取大优先返回最佳合法牌型。"""
     results = identify_all_card_types(cards, current_level)
     valid = [result for result in results if result["type"] != INVALID]
     return max(valid, key=_default_strength) if valid else results[0]
 
 
+def identify_card_type(cards: List[Card], current_level: str = "2") -> CardTypeResult:
+    """兼容旧接口；所有识别统一委托给recognize。"""
+    return recognize(cards, current_level)
+
+
 def get_card_type(cards: List[Card], current_level: str = "2") -> CardTypeResult:
-    return identify_card_type(cards, current_level)
+    return recognize(cards, current_level)
 
 
 def compare(card_type1: CardTypeResult, card_type2: CardTypeResult) -> int:
@@ -213,5 +218,5 @@ __all__ = [
     "INVALID", "SINGLE", "PAIR", "TRIPLE", "TRIPLE_WITH_PAIR", "STRAIGHT",
     "DOUBLE_SEQUENCE", "STEEL_PLATE", "BOMB", "STRAIGHT_FLUSH", "JOKER_BOMB",
     "CardTypeResult", "card_strength", "is_wild_card", "identify_all_card_types",
-    "identify_card_type", "get_card_type", "compare", "VALID_CARD_TYPES",
+    "recognize", "identify_card_type", "get_card_type", "compare", "VALID_CARD_TYPES",
 ]
