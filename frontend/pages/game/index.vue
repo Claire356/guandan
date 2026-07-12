@@ -5,6 +5,7 @@
       <text>第 {{ store.game?.round_number || 1 }} 局</text>
       <u-tag :text="store.offlineDemo ? '离线演示' : '在线训练'" size="mini" bgColor="rgba(255,255,255,.16)" borderColor="transparent" color="#fff" />
     </view>
+    <view class="level-banner"><text>当前级牌</text><strong>打{{ currentLevel }}</strong></view>
 
     <view class="game-table">
       <view class="player top"><view class="avatar">AI</view><text>AI-2</text><text class="count">{{ playerCount('AI-2') }}张</text></view>
@@ -61,6 +62,7 @@ import { useGameStore } from '@/store/game'
 import PlayingCard from '@/components/PlayingCard.vue'
 const store = useGameStore()
 const tableActions = computed(() => store.game?.state?.table_plays || [])
+const currentLevel = computed(() => store.game?.currentLevel || store.game?.state?.current_level || '2')
 const historyScrollTop = computed(() => tableActions.value.length * 120)
 const playerNames = ['你', 'AI-1', 'AI-2', 'AI-3']
 const playPosition = { '你': 'bottom-play', 'AI-1': 'left-play', 'AI-2': 'top-play', 'AI-3': 'right-play' }
@@ -83,6 +85,7 @@ const finish = () => { store.finishDemo(); uni.navigateTo({ url: '/pages/settlem
 <style scoped lang="scss">
 .table-page { min-height: 100vh; background: #075337; color: #fff; }
 .table-head { height: 104rpx; padding: 38rpx 28rpx 16rpx; display: flex; align-items: center; justify-content: space-between; font-weight: 700; }
+.level-banner { width:210rpx; margin:0 auto 12rpx; padding:8rpx 18rpx; display:flex; justify-content:space-between; align-items:center; border:1rpx solid rgba(244,214,111,.55); border-radius:99rpx; background:rgba(0,0,0,.14); font-size:21rpx; }.level-banner strong { color:#f4d66f; font-size:27rpx; }
 .game-table { position: relative; height: 670rpx; margin: 0 18rpx; overflow: hidden; border: 2rpx solid rgba(216,182,91,.42); border-radius: 42rpx; background: radial-gradient(circle, #168257 0, #0e6b47 60%, #09553a 100%); box-shadow: inset 0 0 70rpx rgba(0,0,0,.2); }
 .player { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 4rpx; font-size: 23rpx; }.player.top { top: 24rpx; left: 50%; transform: translateX(-50%); }.player.left { left: 20rpx; top: 250rpx; }.player.right { right: 20rpx; top: 250rpx; }
 .avatar { width: 72rpx; height: 72rpx; display: flex; align-items: center; justify-content: center; border: 3rpx solid rgba(255,255,255,.65); border-radius: 50%; background: #164d38; font-size: 23rpx; font-weight: 800; }.count { font-size: 20rpx; color: rgba(255,255,255,.65); }

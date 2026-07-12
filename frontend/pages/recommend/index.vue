@@ -7,6 +7,7 @@
       <text class="muted">基于桌面牌型、剩余手牌和你的训练策略计算</text>
       <view class="cards"><PlayingCard v-for="(card, index) in displayCards" :key="index" :card="card" disabled /></view>
       <view class="type-row"><text>推荐牌型</text><text>{{ typeName }}</text></view>
+      <view class="type-row"><text>期望收益</text><text>{{ expectedValue }}</text></view>
     </view>
 
     <text class="section-title">为什么这样出</text>
@@ -27,7 +28,8 @@ onMounted(() => store.recommend())
 const strategyName = computed(() => ({ aggressive: '激进策略', balanced: '均衡策略', conservative: '保守策略' }[store.strategy]))
 const displayCards = computed(() => store.recommendation.length ? store.recommendation : ['♠8'])
 const typeName = computed(() => ({ single: '单张', pair: '对子', bomb: '炸弹', straight: '顺子' }[store.recommendationType?.type] || '计算中'))
-const reasons = ['用较低成本完成有效压制', '保留高牌和成组牌用于后续轮次', '降低拆牌风险，维持手牌结构']
+const reasons = computed(() => (store.recommendationReason || '正在分析当前牌局').split('；').filter(Boolean))
+const expectedValue = computed(() => `${Math.round((store.recommendationExpectedValue || 0) * 100)}%`)
 const back = () => uni.navigateBack()
 const accept = () => {
   store.selectedIndices = [...store.recommendationIndices]
