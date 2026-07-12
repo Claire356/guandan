@@ -30,7 +30,7 @@
       ]
     }
   ],
-  "experimentalServices": {
+  "services": {
     "frontend": {
       "entrypoint": "frontend",
       "routePrefix": "/",
