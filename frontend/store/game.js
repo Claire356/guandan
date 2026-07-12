@@ -119,6 +119,8 @@ export const useGameStore = defineStore('game', {
     recommendation: [],
     recommendationIndices: [],
     recommendationType: null,
+    recommendationReason: '',
+    recommendationExpectedValue: 0,
     history: [],
     logs: [],
     strategy: 'balanced',
@@ -141,6 +143,8 @@ export const useGameStore = defineStore('game', {
       this.selectedIndices = []
       this.recommendation = []
       this.recommendationIndices = []
+      this.recommendationReason = ''
+      this.recommendationExpectedValue = 0
       this.hand = sortCards(newOfflineDeal[0])
       this.offlineAiHands = {}
       this.aiThinking = false
@@ -158,9 +162,10 @@ export const useGameStore = defineStore('game', {
         }
         this.game = {
           phase: 'ready', round_number: 1,
-          players: ['你', 'AI-1', 'AI-2', 'AI-3'].map((name, index) => ({ name, hand_count: demoCards.length, team_id: index < 2 ? 0 : 1 })),
+          players: ['你', 'AI-1', 'AI-2', 'AI-3'].map((name, index) => ({ name, hand_count: demoCards.length, team_id: index % 2 })),
           state: {
             current_player_index: 0,
+            current_level: '2',
             current_turn_count: 0,
             last_played_cards: [],
             last_player_name: null,
@@ -263,6 +268,8 @@ export const useGameStore = defineStore('game', {
         const response = await gameApi.getRecommendation(this.strategy)
         this.recommendation = response.cards
         this.recommendationType = response.card_type
+        this.recommendationReason = response.reason || '根据当前牌型与手牌结构选择合法收益最高的方案'
+        this.recommendationExpectedValue = response.expected_value || 0
         const used = new Set()
         this.recommendationIndices = response.cards.map(card => {
           const index = this.hand.findIndex((handCard, handIndex) => (
@@ -279,6 +286,8 @@ export const useGameStore = defineStore('game', {
         this.recommendation = this.hand.slice(0, 1).map(label => ({ label }))
         this.recommendationIndices = this.hand.length ? [0] : []
         this.recommendationType = { type: 'single', level: 3, length: 1 }
+        this.recommendationReason = '优先用较小单张试探并保留成组牌、炸弹和逢人配'
+        this.recommendationExpectedValue = 0.56
       }
     },
     async loadHistory() {

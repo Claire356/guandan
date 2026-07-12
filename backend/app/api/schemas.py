@@ -46,7 +46,10 @@ class RecommendResponse(BaseModel):
     success: bool = True
     should_pass: bool
     cards: List[Dict[str, Any]]
+    recommend_cards: List[Dict[str, Any]]
     card_type: Dict[str, Any]
+    reason: str
+    expected_value: float
 
 
 class HistoryResponse(BaseModel):

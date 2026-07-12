@@ -1,7 +1,7 @@
 from typing import List, Optional
 
 from .card import Card
-from .patterns import PatternRegistry
+from .card_type import INVALID, compare, identify_all_card_types, identify_card_type
 from .player import Player
 from .turn import Turn
 
@@ -9,8 +9,9 @@ from .turn import Turn
 class Round:
     """一局牌局中的回合管理，负责验证出牌规则。"""
 
-    def __init__(self, players: List[Player]) -> None:
+    def __init__(self, players: List[Player], current_level: str = "2") -> None:
         self.players = players
+        self.current_level = current_level
         self.current_player_index = 0
         self.turn_history: List[Turn] = []
         self.last_played_cards: Optional[List[Card]] = None
@@ -58,40 +59,15 @@ class Round:
         return turn
 
     def _detect_pattern(self, cards: List[Card]) -> Optional[str]:
-        """识别牌型，支持单张、对子、三张、炸弹、顺子和连对。"""
-        if not cards:
-            return None
-        if len(cards) == 1:
-            return PatternRegistry.SINGLE
-        if len(cards) == 2 and cards[0].value == cards[1].value:
-            return PatternRegistry.PAIR
-        if len(cards) == 3 and cards[0].value == cards[1].value == cards[2].value:
-            return PatternRegistry.TRIPLE
-        if len(cards) == 4 and cards[0].value == cards[1].value == cards[2].value == cards[3].value:
-            return PatternRegistry.BOMB
-        if len(cards) >= 5 and not any(card.is_joker for card in cards):
-            sorted_cards = sorted(cards, key=lambda card: card.value)
-            values = [card.value for card in sorted_cards]
-            if values == list(range(values[0], values[0] + len(values))):
-                return PatternRegistry.SEQUENCE
-        if len(cards) >= 6 and len(cards) % 2 == 0 and not any(card.is_joker for card in cards):
-            sorted_cards = sorted(cards, key=lambda card: card.value)
-            pairs = [sorted_cards[i].value for i in range(0, len(sorted_cards), 2)]
-            if all(sorted_cards[i].value == sorted_cards[i + 1].value for i in range(0, len(sorted_cards), 2)) and pairs == list(range(pairs[0], pairs[0] + len(pairs))):
-                return PatternRegistry.DOUBLE_SEQUENCE
-        return None
+        """使用统一牌型模块识别，包含逢人配及全部竞赛牌型。"""
+        result = identify_card_type(cards, self.current_level)
+        return None if result["type"] == INVALID else result["type"]
 
     def _is_valid_against_previous(self, pattern: str, previous_cards: List[Card], current_cards: List[Card]) -> bool:
         """判断当前牌是否满足压制上家规则。"""
-        previous_pattern = self._detect_pattern(previous_cards)
-        if previous_pattern is None or pattern is None:
+        if pattern is None:
             return False
-        if previous_pattern == PatternRegistry.BOMB and pattern != PatternRegistry.BOMB:
-            return False
-        if previous_pattern != pattern and pattern != PatternRegistry.BOMB:
-            return False
-        if pattern == PatternRegistry.BOMB and previous_pattern != PatternRegistry.BOMB:
-            return True
-        if pattern == PatternRegistry.BOMB and previous_pattern == PatternRegistry.BOMB:
-            return max(card.value for card in current_cards) > max(card.value for card in previous_cards)
-        return max(card.value for card in current_cards) > max(card.value for card in previous_cards)
+        previous_types = [item for item in identify_all_card_types(previous_cards, self.current_level) if item["type"] != INVALID]
+        current_types = [item for item in identify_all_card_types(current_cards, self.current_level) if item["type"] != INVALID]
+        # 逢人配存在多种解释时，压牌方可选择任何能够合法压制的解释。
+        return any(compare(current, previous) > 0 for current in current_types for previous in previous_types)

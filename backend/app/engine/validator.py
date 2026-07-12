@@ -4,7 +4,7 @@ from collections import Counter
 from typing import List, Optional, TypedDict
 
 from .card import Card
-from .card_type import CardTypeResult, INVALID, compare, identify_card_type
+from .card_type import CardTypeResult, INVALID, compare, identify_all_card_types, identify_card_type
 
 
 class ValidationResult(TypedDict):
@@ -54,6 +54,7 @@ def validate_play(
     hand: List[Card],
     current_card_type: Optional[CardTypeResult],
     cards_to_play: List[Card],
+    current_level: str = "2",
 ) -> ValidationResult:
     """验证一次准备中的出牌，但不修改玩家手牌。
 
@@ -72,7 +73,7 @@ def validate_play(
     if not all(isinstance(card, Card) for card in cards_to_play):
         return _validation_result(False, "准备出的牌包含无效对象", invalid_type)
 
-    proposed_type = identify_card_type(cards_to_play)
+    proposed_type = identify_card_type(cards_to_play, current_level)
 
     # 待出牌每一种完整牌面的数量都不能超过手牌中的实际数量。
     if not _contains_all_cards(hand, cards_to_play):
@@ -93,7 +94,8 @@ def validate_play(
         return _validation_result(False, "当前桌面牌型无效", proposed_type)
 
     # compare 大于零表示准备出的牌能严格压过桌面牌；相等也不能出。
-    if compare(proposed_type, current_card_type) <= 0:
+    proposed_types = [item for item in identify_all_card_types(cards_to_play, current_level) if item["type"] != INVALID]
+    if not any(compare(item, current_card_type) > 0 for item in proposed_types):
         if proposed_type["type"] != current_card_type["type"]:
             reason = "牌型不同，无法压过当前桌面牌型"
         else:

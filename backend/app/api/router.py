@@ -41,6 +41,7 @@ def _current_player(game: Game):
 def _game_payload(game: Game) -> dict:
     """返回游戏状态，并附带当前行动玩家的真实手牌。"""
     payload = game.to_dict()
+    payload["currentLevel"] = game.state.current_level
     player = _current_player(game)
     payload["current_hand"] = [card.to_dict() for card in player.hand]
     round_obj = game.current_round
@@ -115,10 +116,15 @@ def pass_turn() -> ActionResponse:
         raise HTTPException(status_code=400, detail="当前拥有主动出牌权，不能过牌")
     player = _current_player(game)
     turn = round_obj.play_turn(player, [], is_pass=True)
+    game.state.current_player_index = round_obj.current_player_index
+    game.state.current_turn_count += 1
+    game.state.add_log(f"{player.name} 选择PASS")
     if len(round_obj.turn_history) >= 3 and all(item.is_pass for item in round_obj.turn_history[-3:]):
         round_obj.last_played_cards = None
         round_obj.last_player = None
         round_obj.phase = "waiting"
+        game.state.last_played_cards = None
+        game.state.last_player_name = None
     _run_ai_until_human(game)
     return ActionResponse(turn=turn.to_dict(), game=_game_payload(game))
 
@@ -133,11 +139,16 @@ def recommend(request: RecommendRequest) -> RecommendResponse:
         "balanced": Balanced,
         "conservative": Conservative,
     }
-    cards = strategies[request.strategy](game, player).recommend()
+    ai = strategies[request.strategy](game, player)
+    recommendation = ai.recommend_with_reason()
+    cards = recommendation["recommend_cards"]
     return RecommendResponse(
         should_pass=not cards,
         cards=[card.to_dict() for card in cards],
-        card_type=identify_card_type(cards),
+        recommend_cards=[card.to_dict() for card in cards],
+        card_type=identify_card_type(cards, game.state.current_level),
+        reason=recommendation["reason"],
+        expected_value=recommendation["expected_value"],
     )
 
 

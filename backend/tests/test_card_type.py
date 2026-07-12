@@ -62,7 +62,7 @@ class CardTypeRecognitionTests(unittest.TestCase):
     def test_33_low_ace_straight_flush(self): self.assert_type([14, 15, 3, 4, 5], "straight_flush", 5, ["♠"] * 5)
     def test_34_mixed_suit_not_straight_flush(self): self.assert_type([4, 5, 6, 7, 8], "straight", 8)
     def test_35_joker_bomb(self): self.assertEqual(identify_card_type(jokers()), {"type": "joker_bomb", "level": 17, "length": 4})
-    def test_36_four_same_jokers_not_joker_bomb(self): self.assertEqual(identify_card_type([jokers()[0]] * 4)["type"], "bomb")
+    def test_36_four_same_jokers_are_invalid(self): self.assertEqual(identify_card_type([jokers()[0]] * 4)["type"], "invalid")
     def test_37_get_card_type_direct_call(self): self.assertEqual(get_card_type(cards([3]))["type"], "single")
 
 
