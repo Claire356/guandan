@@ -1,0 +1,5 @@
+﻿strategy,simulated_games,recommendation_adoption_rate,ai_win_rate,bomb_usage_rate,endgame_accuracy,help_partner_count,expected_value,wasted_bombs,partner_misses,wildcard_misses
+aggressive,100,1.0,0.14,0.0383,1.0,411,0.5188,0,0,0
+balanced,100,1.0,0.375,0.0469,0.9995,886,0.5434,0,0,0
+conservative,100,1.0,0.11,0.0461,1.0,392,0.5284,0,0,0
+overall,100,1.0,0.25,0.0445,0.9998,1689,0.5335,0,0,0
