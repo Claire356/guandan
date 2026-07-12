@@ -195,7 +195,7 @@ export const useGameStore = defineStore('game', {
         this.game.state.last_played_cards = playedCards
         this.game.state.last_player_name = '你'
         this.game.state.last_action_text = `你出了 ${playedCards.join(' ')}`
-        this.game.state.table_plays = [{ player: '你', cards: playedCards, is_pass: false }]
+        this.game.state.table_plays.push({ player: '你', cards: playedCards, is_pass: false })
         this.game.state.current_turn_count += 1
         this.game.state.log.push(`你出了 ${playedCards.join(' ')}`)
         const human = this.game.players.find(player => player.name === '你')
@@ -250,7 +250,7 @@ export const useGameStore = defineStore('game', {
         this.hand = sortCards(response.game.current_hand || [])
       } else if ((this.game.state.last_played_cards || []).length) {
         this.game.state.last_action_text = '你 · PASS'
-        this.game.state.table_plays = [{ player: '你', cards: [], is_pass: true }]
+        this.game.state.table_plays.push({ player: '你', cards: [], is_pass: true })
         this.game.state.log.push('你选择 PASS')
         this.game.state.current_turn_count += 1
         await this.runOfflineAiTurns()
