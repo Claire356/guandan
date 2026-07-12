@@ -52,7 +52,7 @@ class ValidatorTests(unittest.TestCase):
     def test_23_lower_straight_loses(self): self.assertFalse(self.validate([3, 4, 5, 6, 7], [3, 4, 5, 6, 7], table([4, 5, 6, 7, 8]))["valid"])
     def test_24_bomb_beats_single(self): self.assertTrue(self.validate([4, 4, 4, 4], [4, 4, 4, 4], table([14]))["valid"])
     def test_25_single_cannot_beat_bomb(self): self.assertFalse(self.validate([14], [14], table([4, 4, 4, 4]))["valid"])
-    def test_26_longer_bomb_wins(self): self.assertTrue(self.validate([3] * 5, [3] * 5, table([14] * 4))["valid"])
+    def test_26_five_same_is_not_a_bomb(self): self.assertFalse(self.validate([3] * 5, [3] * 5, table([14] * 4))["valid"])
     def test_27_lower_same_length_bomb_loses(self): self.assertFalse(self.validate([6] * 4, [6] * 4, table([7] * 4))["valid"])
     def test_28_invalid_current_type_is_rejected(self): self.assertFalse(self.validate([3], [3], {"type": "invalid", "level": 0, "length": 0})["valid"])
     def test_29_incomplete_current_type_is_rejected(self): self.assertFalse(self.validate([3], [3], {"type": "single"})["valid"])

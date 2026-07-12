@@ -1,16 +1,20 @@
 <template>
-  <view class="table-page safe-bottom">
+  <view class="table-page safe-bottom" @touchstart="ensureBgm" @click="ensureBgm">
     <view class="table-head">
       <u-icon name="arrow-left" color="#fff" size="24" @click="back" />
       <text>第 {{ store.game?.round_number || 1 }} 局</text>
-      <u-tag :text="store.offlineDemo ? '离线演示' : '在线训练'" size="mini" bgColor="rgba(255,255,255,.16)" borderColor="transparent" color="#fff" />
+      <view class="head-tools">
+        <view class="music-toggle" @click.stop="toggleBgm"><text>{{ musicEnabled ? '♫' : '♩' }}</text></view>
+        <u-tag :text="store.offlineDemo ? '离线演示' : '在线训练'" size="mini" bgColor="rgba(255,255,255,.16)" borderColor="transparent" color="#fff" />
+      </view>
     </view>
     <view class="level-banner"><text>当前级牌</text><strong>打{{ currentLevel }}</strong></view>
 
     <view class="game-table">
-      <view class="player top"><view class="avatar">AI</view><text>AI-2</text><text class="count">{{ playerCount('AI-2') }}张</text></view>
-      <view class="player left"><view class="avatar">AI</view><text>AI-1</text><text class="count">{{ playerCount('AI-1') }}张</text></view>
-      <view class="player right"><view class="avatar">AI</view><text>AI-3</text><text class="count">{{ playerCount('AI-3') }}张</text></view>
+      <view v-for="seat in aiSeats" :key="seat.player.name" class="player" :class="seat.position">
+        <image class="avatar-image" :src="seat.player.avatar" mode="aspectFill" />
+        <text>{{ seat.player.name }}</text><text class="count">{{ seat.player.hand_count }}张</text>
+      </view>
       <view v-for="name in playerNames" :key="name" class="table-play" :class="playPosition[name]">
         <view v-if="actionFor(name)?.cards?.length" class="play-cards">
           <PlayingCard v-for="(card,index) in actionFor(name).cards" :key="`${name}-${index}`" :card="card" disabled />
@@ -57,21 +61,87 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { onHide, onShow } from '@dcloudio/uni-app'
 import { useGameStore } from '@/store/game'
 import PlayingCard from '@/components/PlayingCard.vue'
 const store = useGameStore()
+const musicEnabled = ref(true)
+let bgm = null
+let musicStarted = false
+
+// 牌桌背景音乐使用独立音频上下文，循环播放且不会阻塞出牌操作。
+const startBgm = () => {
+  if (!bgm || !musicEnabled.value) return
+  const playResult = bgm.play()
+  if (playResult?.catch) playResult.catch(() => { musicStarted = false })
+}
+
+// H5 浏览器可能禁止无交互自动播放，首次点击牌桌时再次尝试启动。
+const ensureBgm = () => {
+  if (!musicStarted && musicEnabled.value) startBgm()
+}
+
+const toggleBgm = () => {
+  musicEnabled.value = !musicEnabled.value
+  if (musicEnabled.value) startBgm()
+  else {
+    bgm?.pause()
+    musicStarted = false
+  }
+}
+
+onMounted(() => {
+  // H5 优先使用浏览器原生 Audio；App/小程序继续使用 UniApp 音频上下文。
+  // #ifdef H5
+  // M4A 由用户提供的 OGG 无损流程转码，兼容 iPhone Safari 与桌面浏览器。
+  bgm = new Audio('/audio/guandan-table-bgm.m4a')
+  bgm.addEventListener('play', () => { musicStarted = true })
+  bgm.addEventListener('error', () => { musicStarted = false })
+  // #endif
+  // #ifndef H5
+  bgm = uni.createInnerAudioContext()
+  bgm.src = '/audio/guandan-table-bgm.ogg'
+  bgm.onPlay(() => { musicStarted = true })
+  bgm.onError(() => { musicStarted = false })
+  // #endif
+  bgm.loop = true
+  bgm.volume = 0.28
+  bgm.autoplay = true
+  startBgm()
+})
+onShow(() => { if (musicEnabled.value) startBgm() })
+onHide(() => { bgm?.pause(); musicStarted = false })
+onBeforeUnmount(() => {
+  if (typeof bgm?.stop === 'function') bgm.stop()
+  else bgm?.pause()
+  if (typeof bgm?.destroy === 'function') bgm.destroy()
+  else if (bgm) bgm.src = ''
+  bgm = null
+  musicStarted = false
+})
 const tableActions = computed(() => store.game?.state?.table_plays || [])
 const currentLevel = computed(() => store.game?.currentLevel || store.game?.state?.current_level || '2')
 const historyScrollTop = computed(() => tableActions.value.length * 120)
-const playerNames = ['你', 'AI-1', 'AI-2', 'AI-3']
-const playPosition = { '你': 'bottom-play', 'AI-1': 'left-play', 'AI-2': 'top-play', 'AI-3': 'right-play' }
+const playerNames = computed(() => (store.game?.players || []).map(player => player.name))
+const aiSeats = computed(() => {
+  const players = store.game?.players || []
+  return [
+    { player: players[2] || {name:'AI',avatar:'',hand_count:27}, position:'top' },
+    { player: players[1] || {name:'AI',avatar:'',hand_count:27}, position:'left' },
+    { player: players[3] || {name:'AI',avatar:'',hand_count:27}, position:'right' }
+  ]
+})
+const playPosition = computed(() => {
+  const names = playerNames.value
+  return { [names[0]]:'bottom-play', [names[1]]:'left-play', [names[2]]:'top-play', [names[3]]:'right-play' }
+})
 const actionFor = name => [...tableActions.value].reverse().find(action => action.player === name)
 const lastPlayerText = computed(() => store.game?.state?.last_action_text || (store.game?.state?.last_player_name ? `${store.game.state.last_player_name} · 最近出牌` : '本轮由你开始'))
 const turnText = computed(() => {
   if (store.game?.winner) return '牌局已结束'
   const index = store.game?.state?.current_player_index || 0
-  return index === 0 ? '轮到你出牌' : `轮到 AI-${index}`
+  return index === 0 ? '轮到你出牌' : `轮到 ${store.game?.players?.[index]?.name || 'AI'}出牌`
 })
 const playerCount = name => store.game?.players?.find(player => player.name === name)?.hand_count ?? 27
 const back = () => uni.navigateBack()
@@ -85,10 +155,11 @@ const finish = () => { store.finishDemo(); uni.navigateTo({ url: '/pages/settlem
 <style scoped lang="scss">
 .table-page { min-height: 100vh; background: #075337; color: #fff; }
 .table-head { height: 104rpx; padding: 38rpx 28rpx 16rpx; display: flex; align-items: center; justify-content: space-between; font-weight: 700; }
+.head-tools { display:flex; align-items:center; gap:12rpx; }.music-toggle { width:48rpx; height:48rpx; display:flex; align-items:center; justify-content:center; border:1rpx solid rgba(255,255,255,.28); border-radius:50%; background:rgba(255,255,255,.14); }.music-toggle text { color:#f4d66f; font-size:29rpx; font-weight:800; }
 .level-banner { width:210rpx; margin:0 auto 12rpx; padding:8rpx 18rpx; display:flex; justify-content:space-between; align-items:center; border:1rpx solid rgba(244,214,111,.55); border-radius:99rpx; background:rgba(0,0,0,.14); font-size:21rpx; }.level-banner strong { color:#f4d66f; font-size:27rpx; }
 .game-table { position: relative; height: 670rpx; margin: 0 18rpx; overflow: hidden; border: 2rpx solid rgba(216,182,91,.42); border-radius: 42rpx; background: radial-gradient(circle, #168257 0, #0e6b47 60%, #09553a 100%); box-shadow: inset 0 0 70rpx rgba(0,0,0,.2); }
 .player { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 4rpx; font-size: 23rpx; }.player.top { top: 24rpx; left: 50%; transform: translateX(-50%); }.player.left { left: 20rpx; top: 250rpx; }.player.right { right: 20rpx; top: 250rpx; }
-.avatar { width: 72rpx; height: 72rpx; display: flex; align-items: center; justify-content: center; border: 3rpx solid rgba(255,255,255,.65); border-radius: 50%; background: #164d38; font-size: 23rpx; font-weight: 800; }.count { font-size: 20rpx; color: rgba(255,255,255,.65); }
+.avatar-image { width:72rpx; height:72rpx; border:3rpx solid rgba(255,255,255,.78); border-radius:50%; background:#164d38; box-shadow:0 6rpx 18rpx rgba(0,0,0,.22); }.count { font-size: 20rpx; color: rgba(255,255,255,.65); }
 .desk-center { position: absolute; left: 50%; top: 49%; transform: translate(-50%,-50%); text-align: center; }.desk-label,.last-play { display: block; font-size: 22rpx; color: rgba(255,255,255,.68); }.empty-desk { display:block; margin:18rpx 0; color:rgba(255,255,255,.55); font-size:25rpx; }
 .table-play { position:absolute; z-index:2; min-width:90rpx; min-height:74rpx; display:flex; align-items:center; justify-content:center; }.top-play { top:120rpx; left:50%; transform:translateX(-50%); }.left-play { left:105rpx; top:285rpx; }.right-play { right:105rpx; top:285rpx; }.bottom-play { bottom:92rpx; left:50%; transform:translateX(-50%); }
 .play-cards { display:flex; justify-content:center; }.play-cards :deep(.card) { width:54rpx; height:78rpx; flex-basis:54rpx; padding:6rpx; margin-left:-16rpx; border-radius:7rpx; }.play-cards :deep(.card:first-child) { margin-left:0; }.play-cards :deep(.card__label) { font-size:20rpx; }.play-cards :deep(.card__suit) { margin-top:4rpx; font-size:18rpx; }.pass-mark { padding:6rpx 12rpx; border-radius:10rpx; background:rgba(0,0,0,.2); color:rgba(255,255,255,.72); font-size:21rpx; font-weight:700; }

@@ -21,9 +21,9 @@ const buildOfflineDeal = () => {
 }
 const offlineDeal = buildOfflineDeal()
 const demoCards = offlineDeal[0]
-const rankLevel = { 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10, J: 11, Q: 12, K: 13, A: 14, 2: 15, 小王: 16, 大王: 17 }
-const cardRank = card => String(card).slice(1)
-const suitLevel = { '♠': 0, '♥': 1, '♣': 2, '♦': 3, '🃏': 4 }
+const rankLevel = { 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10, J: 11, Q: 12, K: 13, A: 14, 小王: 16, 大王: 17 }
+const cardRank = card => String(card).includes('大王') ? '大王' : (String(card).includes('小王') ? '小王' : String(card).slice(1))
+const suitLevel = { '♦': 1, '♣': 2, '♥': 3, '♠': 4, '🃏': 0 }
 const cardSuit = card => typeof card === 'string' ? card.slice(0, 1) : (card.suit === 'Joker' ? '🃏' : card.suit)
 const normalizedRank = card => typeof card === 'string' ? cardRank(card) : card.rank
 const sortCards = cards => [...cards].sort((first, second) => (
@@ -31,6 +31,21 @@ const sortCards = cards => [...cards].sort((first, second) => (
   || (suitLevel[cardSuit(first)] ?? 9) - (suitLevel[cardSuit(second)] ?? 9)
 ))
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
+const aiNamePool = ['牌圣','炸到底','别管我','稳住哥','天选人','王炸王','冲冲冲','赌一手','别炸我','过过过','小钢板','同花顺','起飞啦','逆风局','听我炸']
+const shuffle = values => [...values].sort(() => Math.random() - 0.5)
+// 离线演示也通过独立身份资料生成，不把昵称和头像写入出牌规则。
+const buildOfflineIdentities = () => {
+  const avatarIds = shuffle(Array.from({ length: 70 }, (_, index) => index + 1)).slice(0, 3)
+  const avatarStyles = shuffle(['高颜值美女','高颜值帅哥','潮流电竞风','都市时尚风','国风写真','二次元真人写真风'])
+  return shuffle(aiNamePool).slice(0, 3).map((name, index) => ({
+    name,
+    avatar: `https://i.pravatar.cc/500?img=${avatarIds[index]}`,
+    avatar_style: avatarStyles[index],
+    is_human: false,
+    team_id: (index + 1) % 2,
+    hand_count: 27
+  }))
+}
 
 const groupCards = cards => {
   const groups = {}
@@ -45,31 +60,63 @@ const groupCards = cards => {
 const consecutive = levels => levels.every((level, index) => index === 0 || level === levels[index - 1] + 1)
 
 // 识别离线对打所需的核心牌型；返回结构与后端 card_type 保持一致。
-const identifyOfflineType = cards => {
+const identifyOfflineType = (cards, currentLevel = '2') => {
   const length = cards.length
   const groups = groupCards(cards)
   const entries = Object.entries(groups)
   const counts = entries.map(([, items]) => items.length).sort((a, b) => b - a)
-  const levels = entries.map(([rank]) => rankLevel[rank] || 0).sort((a, b) => a - b)
-  if (length === 1) return { type: 'single', level: levels[0], length }
-  if (entries.length === 1 && length === 2) return { type: 'pair', level: levels[0], length }
-  if (entries.length === 1 && length === 3) return { type: 'triple', level: levels[0], length }
-  if (entries.length === 1 && length >= 4) return { type: 'bomb', level: levels[0], length }
+  const strength = rank => rank === currentLevel ? 15 : (rankLevel[rank] || 0)
+  const levels = entries.map(([rank]) => strength(rank)).sort((a, b) => a - b)
+  const wild = cards.filter(card => card === `♥${currentLevel}`)
+  if (length === 1 && wild.length) return { type:'invalid', level:0, length }
+  // 离线 H5 的逢人配至少覆盖单组牌型；复杂组合无法确定时拒绝，避免放行非法牌。
+  if (wild.length && wild.length < length) {
+    const normalRanks = cards.filter(card => card !== `♥${currentLevel}`).map(cardRank)
+    const ordinary = normalRanks.filter(rank => !['小王','大王'].includes(rank))
+    if (ordinary.length && new Set(ordinary).size === 1 && length <= 4) {
+      const type = {2:'pair',3:'triple',4:'bomb'}[length]
+      return { type, level:strength(ordinary[0]), length, pure:false, suit_level:4 }
+    }
+  }
+  if (length === 4 && cards.filter(card => cardRank(card) === '大王').length === 2 && cards.filter(card => cardRank(card) === '小王').length === 2) return {type:'joker_bomb',level:17,length}
+  if (length === 1) return { type: 'single', level: levels[0], length, suit_level:suitLevel[cardSuit(cards[0])] || 0 }
+  if (entries.length === 1 && length === 2 && !['小王','大王'].includes(entries[0][0])) return { type: 'pair', level: levels[0], length, suit_level:Math.max(...cards.map(card => suitLevel[cardSuit(card)] || 0)) }
+  if (entries.length === 1 && length === 3 && !['小王','大王'].includes(entries[0][0])) return { type: 'triple', level: levels[0], length }
+  if (entries.length === 1 && length === 4 && !['小王','大王'].includes(entries[0][0])) return { type: 'bomb', level: levels[0], length, pure:true }
   if (length === 5 && counts.join(',') === '3,2') {
     const triple = entries.find(([, items]) => items.length === 3)
     return { type: 'triple_with_pair', level: rankLevel[triple[0]], length }
   }
-  if (length === 5 && entries.length === 5 && !levels.includes(15) && consecutive(levels)) return { type: 'straight', level: levels[4], length }
-  if (length === 6 && counts.join(',') === '2,2,2' && consecutive(levels)) return { type: 'double_sequence', level: levels[2], length }
-  if (length === 6 && counts.join(',') === '3,3' && consecutive(levels)) return { type: 'steel_plate', level: levels[1], length }
+  const sequenceLevels = entries.map(([rank]) => rankLevel[rank] || 0).sort((a,b) => a-b)
+  if (length >= 5 && entries.length === length && !entries.some(([rank]) => ['2','小王','大王'].includes(rank)) && consecutive(sequenceLevels)) {
+    const sameSuit = length === 5 && new Set(cards.map(cardSuit)).size === 1
+    return { type:sameSuit ? 'straight_flush' : 'straight', level:sequenceLevels.at(-1), length, suit_level:sameSuit ? suitLevel[cardSuit(cards[0])] : 0 }
+  }
+  if (length >= 6 && length % 2 === 0 && counts.every(count => count === 2) && !entries.some(([rank]) => rank === '2') && consecutive(sequenceLevels)) return { type: 'double_sequence', level: sequenceLevels.at(-1), length }
+  if (length >= 6 && length % 3 === 0 && counts.every(count => count === 3) && !entries.some(([rank]) => rank === '2') && consecutive(sequenceLevels)) return { type: 'steel_plate', level: sequenceLevels.at(-1), length }
   return { type: 'invalid', level: 0, length }
 }
 
-const findOfflineResponse = (hand, tableCards) => {
-  const tableType = identifyOfflineType(tableCards)
+const compareOffline = (mine, table) => {
+  const bombs = ['straight_flush','bomb','joker_bomb']
+  const mineBomb = bombs.includes(mine.type), tableBomb = bombs.includes(table.type)
+  if (mineBomb !== tableBomb) return mineBomb ? 1 : -1
+  if (mineBomb) {
+    const category = {straight_flush:1,bomb:2,joker_bomb:3}
+    if (category[mine.type] !== category[table.type]) return category[mine.type] > category[table.type] ? 1 : -1
+  } else if (mine.type !== table.type || mine.length !== table.length) return 0
+  if (mine.level !== table.level) return mine.level > table.level ? 1 : -1
+  if (mine.type === 'bomb' && Boolean(mine.pure) !== Boolean(table.pure)) return mine.pure ? 1 : -1
+  if (['pair','straight_flush'].includes(mine.type) && mine.suit_level !== table.suit_level) return mine.suit_level > table.suit_level ? 1 : -1
+  return 0
+}
+
+const findOfflineResponse = (hand, tableCards, currentLevel = '2') => {
+  const tableType = identifyOfflineType(tableCards, currentLevel)
   const groups = groupCards(hand)
-  const entries = Object.entries(groups).sort((a, b) => (rankLevel[a[0]] || 0) - (rankLevel[b[0]] || 0))
-  const higherGroup = count => entries.find(([rank, cards]) => cards.length >= count && (rankLevel[rank] || 0) > tableType.level)
+  const strength = rank => rank === currentLevel ? 15 : (rankLevel[rank] || 0)
+  const entries = Object.entries(groups).sort((a, b) => strength(a[0]) - strength(b[0]))
+  const higherGroup = count => entries.find(([rank, cards]) => cards.length >= count && strength(rank) > tableType.level)
   let response = []
 
   if (tableType.type === 'single') {
@@ -87,7 +134,7 @@ const findOfflineResponse = (hand, tableCards) => {
     if (triple && pair) response = [...triple[1].slice(0, 3), ...pair[1].slice(0, 2)]
   } else if (['straight', 'double_sequence', 'steel_plate'].includes(tableType.type)) {
     const width = tableType.type === 'straight' ? 5 : (tableType.type === 'double_sequence' ? 2 : 3)
-    const rankCount = tableType.type === 'straight' ? 1 : 3
+    const rankCount = tableType.type === 'straight' ? 1 : (tableType.type === 'double_sequence' ? 2 : 3)
     const sequenceSize = tableType.type === 'straight' ? 5 : (tableType.type === 'double_sequence' ? 3 : 2)
     for (let start = 3; start + sequenceSize - 1 <= 14 && !response.length; start += 1) {
       const sequence = Array.from({ length: sequenceSize }, (_, index) => start + index)
@@ -96,19 +143,19 @@ const findOfflineResponse = (hand, tableCards) => {
       if (selected.every(Boolean)) response = selected.flatMap(([, cards]) => cards.slice(0, rankCount)).slice(0, width * sequenceSize)
     }
   } else if (tableType.type === 'bomb') {
-    const bomb = entries.find(([rank, cards]) => cards.length > tableType.length || (cards.length === tableType.length && rankLevel[rank] > tableType.level))
+    const bomb = entries.find(([rank, cards]) => cards.length >= 4 && strength(rank) > tableType.level)
     if (bomb) {
-      const responseLength = bomb[1].length > tableType.length ? tableType.length + 1 : tableType.length
-      response = bomb[1].slice(0, responseLength)
+      response = bomb[1].slice(0, 4)
     }
   }
 
   // 普通牌无法压制时，允许 AI 使用最小四张以上炸弹抢回主动权。
   if (!response.length && tableType.type !== 'invalid' && tableType.type !== 'bomb') {
-    const bomb = entries.filter(([, cards]) => cards.length >= 4).sort((a, b) => a[1].length - b[1].length || rankLevel[a[0]] - rankLevel[b[0]])[0]
+    const bomb = entries.filter(([, cards]) => cards.length >= 4).sort((a, b) => rankLevel[a[0]] - rankLevel[b[0]])[0]
     if (bomb) response = bomb[1].slice(0, 4)
   }
-  return response
+  const responseType = identifyOfflineType(response, currentLevel)
+  return response.length && responseType.type !== 'invalid' && compareOffline(responseType, tableType) > 0 ? response : []
 }
 
 export const useGameStore = defineStore('game', {
@@ -138,6 +185,7 @@ export const useGameStore = defineStore('game', {
   actions: {
     async beginTraining(strategy = 'balanced') {
       const newOfflineDeal = buildOfflineDeal()
+      const offlineIdentities = buildOfflineIdentities()
       this.loading = true
       this.strategy = strategy
       this.selectedIndices = []
@@ -156,13 +204,13 @@ export const useGameStore = defineStore('game', {
       } catch (error) {
         this.offlineDemo = true
         this.offlineAiHands = {
-          'AI-1': sortCards(newOfflineDeal[1]),
-          'AI-2': sortCards(newOfflineDeal[2]),
-          'AI-3': sortCards(newOfflineDeal[3])
+          [offlineIdentities[0].name]: sortCards(newOfflineDeal[1]),
+          [offlineIdentities[1].name]: sortCards(newOfflineDeal[2]),
+          [offlineIdentities[2].name]: sortCards(newOfflineDeal[3])
         }
         this.game = {
           phase: 'ready', round_number: 1,
-          players: ['你', 'AI-1', 'AI-2', 'AI-3'].map((name, index) => ({ name, hand_count: demoCards.length, team_id: index % 2 })),
+          players: [{ name: '你', hand_count: 27, team_id: 0, is_human: true, avatar: '' }, ...offlineIdentities],
           state: {
             current_player_index: 0,
             current_level: '2',
@@ -193,8 +241,11 @@ export const useGameStore = defineStore('game', {
       } else {
         // 离线演示同样要保存本次牌面，否则手牌虽被移除，桌面仍会一直显示“等待首出”。
         const playedCards = this.selectedCards
-        const playedType = identifyOfflineType(playedCards)
+        const currentLevel = this.game.state.current_level || '2'
+        const playedType = identifyOfflineType(playedCards, currentLevel)
         if (playedType.type === 'invalid') throw new Error('所选牌不构成合法掼蛋牌型')
+        const tableCards = this.game.state.last_played_cards || []
+        if (tableCards.length && compareOffline(playedType, identifyOfflineType(tableCards, currentLevel)) <= 0) throw new Error('所选牌无法压过当前桌面牌型')
         const used = new Set(this.selectedIndices)
         this.hand = this.hand.filter((_, index) => !used.has(index))
         this.game.state.last_played_cards = playedCards
@@ -216,14 +267,14 @@ export const useGameStore = defineStore('game', {
       this.aiThinking = true
       try {
         for (let playerIndex = 1; playerIndex <= 3; playerIndex += 1) {
-          const name = `AI-${playerIndex}`
+          const name = this.game.players[playerIndex]?.name || `AI-${playerIndex}`
           this.game.state.current_player_index = playerIndex
           this.game.state.last_action_text = `${name} 正在思考…`
           await wait(650)
 
           const tableCards = this.game.state.last_played_cards || []
           const aiHand = this.offlineAiHands[name] || []
-          const responseCards = findOfflineResponse(aiHand, tableCards)
+          const responseCards = findOfflineResponse(aiHand, tableCards, this.game.state.current_level || '2')
 
           if (responseCards.length) {
             responseCards.forEach(card => aiHand.splice(aiHand.indexOf(card), 1))
@@ -283,10 +334,12 @@ export const useGameStore = defineStore('game', {
           return index
         }).filter(index => index >= 0)
       } else {
-        this.recommendation = this.hand.slice(0, 1).map(label => ({ label }))
-        this.recommendationIndices = this.hand.length ? [0] : []
-        this.recommendationType = { type: 'single', level: 3, length: 1 }
-        this.recommendationReason = '优先用较小单张试探并保留成组牌、炸弹和逢人配'
+        const tableCards = this.game.state.last_played_cards || []
+        const cards = tableCards.length ? findOfflineResponse(this.hand, tableCards, this.game.state.current_level || '2') : this.hand.filter(card => card !== `♥${this.game.state.current_level || '2'}`).slice(0,1)
+        this.recommendation = cards.map(label => ({ label }))
+        this.recommendationIndices = cards.map(card => this.hand.indexOf(card)).filter(index => index >= 0)
+        this.recommendationType = cards.length ? identifyOfflineType(cards, this.game.state.current_level) : {type:'pass',level:0,length:0}
+        this.recommendationReason = cards.length ? '推荐牌已通过当前桌面牌型比较' : '当前没有能够合法压过桌面的牌，建议PASS'
         this.recommendationExpectedValue = 0.56
       }
     },
@@ -306,12 +359,37 @@ export const useGameStore = defineStore('game', {
     finishDemo() {
       this.result = { rank: 1, score: 86, title: '头游', bombCount: 2, passCount: 5 }
       this.report = {
-        personality: '均衡稳健型',
-        summary: '整体牌序清晰，关键轮次保持了较好的资源控制。',
-        mistake: '中盘有一次过早拆对，削弱了后续接牌能力。',
-        suggestion: '保留中高对子，在队友取得主动权时优先观察一轮。',
-        metrics: { attack: 68, cooperation: 76, risk: 55, hesitation: 38, emotion: 82 }
+        player: { name: '你', avatar: '' }, overall_score: 68,
+        scores: { aggression:68, cooperation:76, emotion:42, risk:55, decision:72 },
+        tags: ['侵略型','合作型','冷静型','赌狗型','果断型'],
+        dimensions: [
+          {key:'aggression',score:68,tag:'侵略型',explanation:'你喜欢主动掌控牌局，乐于争夺牌权。'},
+          {key:'cooperation',score:76,tag:'合作型',explanation:'你愿意为了队友牺牲自己的牌型。'},
+          {key:'emotion',score:42,tag:'冷静型',explanation:'你的决策较稳定，不容易受到情绪影响。'},
+          {key:'risk',score:55,tag:'赌狗型',explanation:'你更愿意冒险，追求高收益打法。'},
+          {key:'decision',score:72,tag:'果断型',explanation:'你决策迅速，执行力较强。'}
+        ],
+        personality_key:'侵-合-冷-赌-果',
+        personality_title:{
+          title:'冷血赌圣', emoji:'🧊🎰',
+          psychology:'面无表情，内心毫无波澜。炸你就炸你，还需要挑日子吗？喂队友就像投喂流浪猫——精准、冷静、不带感情。',
+          playstyle:'出牌迅速，炸弹使用果断；喂牌精准，同时保持稳定节奏和情绪。',
+          catchphrase:'"炸。接。过。"',
+          tags:['人形空调','扑克脸专业八级','队友不敢搭话'],
+          warning:'请勿在冬天与该玩家组队，气场过于寒冷。建议携带暖宝宝。'
+        },
+        summary:'本局决策节奏清晰，兼顾主动争权与队友协作。'
       }
+    },
+    async loadPersonalityReport() {
+      if (this.offlineDemo) return this.report
+      try {
+        const response = await gameApi.getPersonalityReport()
+        this.report = response.report
+      } catch (error) {
+        if (!this.report) this.finishDemo()
+      }
+      return this.report
     }
   }
 })

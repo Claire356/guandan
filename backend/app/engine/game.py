@@ -88,12 +88,7 @@ class Game:
         eligible = [card for card in giver.hand if not is_wild_card(card, self.current_level)]
         if tribute_card not in eligible or card_strength(tribute_card, self.current_level) != max(card_strength(card, self.current_level) for card in eligible):
             raise ValueError("必须进贡除逢人配外最大的牌")
-        low_returns = [card for card in receiver.hand if not card.is_joker and BASE_LEVEL.get(card.rank, 99) <= 10]
-        if low_returns:
-            if return_card not in low_returns:
-                raise ValueError("有10及以下牌时必须从中还贡")
-        elif return_card != min(receiver.hand, key=lambda card: card_strength(card, self.current_level)):
-            raise ValueError("没有10及以下牌时必须还手中最小牌")
+        # 附件规则允许头游从自己手中选择一张不需要的牌退贡，不再限制为 10 以下。
         total_before = sum(len(player.hand) for player in self.players)
         giver.hand.remove(tribute_card)
         receiver.hand.remove(return_card)
@@ -104,8 +99,8 @@ class Game:
 
     @staticmethod
     def can_resist_tribute(players: List[Player]) -> bool:
-        """单下本人或双下双方合计持有两张大王时抗贡。"""
-        return sum(1 for player in players for card in player.hand if card.is_joker and card.color == "red") >= 2
+        """只有同一名下游玩家同时持有两张大王时免贡。"""
+        return any(sum(1 for card in player.hand if card.is_joker and card.color == "red") >= 2 for player in players)
 
     def check_winner_team(self) -> Optional[int]:
         """判断哪个队伍先完成出完手牌。"""
@@ -129,6 +124,26 @@ class Game:
             self.state.last_played_cards = list(cards)
             self.state.last_player_name = player.name
             self.state.add_log(f"{player.name} 出牌: {', '.join(str(card) for card in cards)}")
+            if not player.hand:
+                # 玩家出完后由交叉座位的队友接风；队友也已出完才轮到下一名对手。
+                player_index = self.players.index(player)
+                partner_index = (player_index + 2) % len(self.players)
+                if self.players[partner_index].hand:
+                    self.current_round.current_player_index = partner_index
+                else:
+                    for offset in range(1, len(self.players) + 1):
+                        candidate = (player_index + offset) % len(self.players)
+                        if self.players[candidate].hand:
+                            self.current_round.current_player_index = candidate
+                            break
+                self.current_round.last_played_cards = None
+                self.current_round.last_card_type = None
+                self.current_round.last_player = None
+                self.current_round.phase = "waiting"
+                self.state.current_player_index = self.current_round.current_player_index
+                self.state.last_played_cards = None
+                self.state.last_player_name = None
+                self.state.add_log(f"{player.name} 出完手牌，进入接风")
         return turn
 
     def handle_contribution(self, from_player: Player, cards: List[Card]) -> None:

@@ -60,6 +60,13 @@ class HistoryResponse(BaseModel):
     turns: List[Dict[str, Any]]
 
 
+class PersonalityReportResponse(BaseModel):
+    """赛后五维人格报告。"""
+
+    success: bool = True
+    report: Dict[str, Any]
+
+
 class ErrorDetail(BaseModel):
     """统一错误详情。"""
 

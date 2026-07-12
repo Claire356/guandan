@@ -55,9 +55,9 @@ class RuleEngineRegressionTests(unittest.TestCase):
         cards = [card("2", "♥"), card("4", "♠"), card("5", "♥"), card("6", "♣"), card("7", "♦")]
         self.assertEqual(recognize(cards, "2"), {"type": STRAIGHT, "level": 8, "length": 5})
 
-    def test_six_cards_cannot_be_five_card_straight(self):
+    def test_six_cards_can_form_long_straight(self):
         cards = [card("2", "♥"), card("4"), card("5"), card("6"), card("7"), card("8")]
-        self.assertEqual(recognize(cards, "2")["type"], "invalid")
+        self.assertEqual(recognize(cards, "2")["type"], STRAIGHT)
 
     def test_validate_rejects_single_over_triple(self):
         hand = [card("A")]

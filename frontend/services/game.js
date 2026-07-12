@@ -5,3 +5,4 @@ export const playCards = cardIndices => client.post('/play', { card_indices: car
 export const passTurn = () => client.post('/pass')
 export const getRecommendation = strategy => client.post('/recommend', { strategy })
 export const getHistory = () => client.get('/history')
+export const getPersonalityReport = () => client.get('/personality_report')
