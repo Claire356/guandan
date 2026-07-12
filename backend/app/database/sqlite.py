@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, create_engine, event, select
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, create_engine, event, inspect, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 
@@ -48,7 +48,7 @@ class BehaviorLog(Base):
 
 
 class PersonalityScore(Base):
-    """保存玩家在三种规则风格上的评分。"""
+    """保存玩家旧版兼容评分与新版五维行为画像。"""
 
     __tablename__ = "personality_score"
 
@@ -62,12 +62,58 @@ class PersonalityScore(Base):
     aggressive_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     balanced_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     conservative_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    aggression_score: Mapped[float] = mapped_column(Float, default=50.0, nullable=False)
+    cooperation_score: Mapped[float] = mapped_column(Float, default=50.0, nullable=False)
+    emotion_score: Mapped[float] = mapped_column(Float, default=50.0, nullable=False)
+    risk_score: Mapped[float] = mapped_column(Float, default=50.0, nullable=False)
+    decision_score: Mapped[float] = mapped_column(Float, default=50.0, nullable=False)
+    personality_tags: Mapped[str] = mapped_column(Text, default="", nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
         nullable=False,
     )
+
+
+class GameActionRecord(Base):
+    """附件定义的逐动作明细表，用于百分位画像和跨局统计。"""
+
+    __tablename__ = "game_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    game_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    player_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    round_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    action_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    cards_played: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    card_type: Mapped[str] = mapped_column(String(30), default="", nullable=False)
+    decision_time: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    opponent_cards: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_bomb: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_risky_play: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    partner_action: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    game_result: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class PlayerStatistics(Base):
+    """附件定义的玩家跨局汇总表。"""
+
+    __tablename__ = "player_statistics"
+
+    player_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    total_games: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_rounds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_bombs_used: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    protect_partner_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    feed_success_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    break_bomb_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    quick_decisions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_decisions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    avg_decision_time: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    decision_time_variance: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
 
 # SQLite 默认不强制外键；连接时通过 PRAGMA 开启，确保级联和引用完整性生效。
@@ -89,6 +135,20 @@ def init_db() -> None:
     """幂等创建所有表；已有数据库和数据不会被覆盖。"""
     DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
+    # create_all 不会为已有 SQLite 表追加字段，因此执行安全、幂等的增量迁移。
+    existing = {column["name"] for column in inspect(engine).get_columns("personality_score")}
+    migrations = {
+        "aggression_score": "FLOAT NOT NULL DEFAULT 50",
+        "cooperation_score": "FLOAT NOT NULL DEFAULT 50",
+        "emotion_score": "FLOAT NOT NULL DEFAULT 50",
+        "risk_score": "FLOAT NOT NULL DEFAULT 50",
+        "decision_score": "FLOAT NOT NULL DEFAULT 50",
+        "personality_tags": "TEXT NOT NULL DEFAULT ''",
+    }
+    with engine.begin() as connection:
+        for column, definition in migrations.items():
+            if column not in existing:
+                connection.execute(text(f"ALTER TABLE personality_score ADD COLUMN {column} {definition}"))
 
 
 def _to_json(value: Optional[Dict[str, Any]]) -> str:
@@ -228,6 +288,12 @@ def create_personality_score(
     balanced_score: float = 0.0,
     conservative_score: float = 0.0,
     game_record_id: Optional[int] = None,
+    aggression_score: float = 50.0,
+    cooperation_score: float = 50.0,
+    emotion_score: float = 50.0,
+    risk_score: float = 50.0,
+    decision_score: float = 50.0,
+    personality_tags: str = "",
 ) -> PersonalityScore:
     """创建一条玩家性格评分。"""
     with SessionLocal() as session:
@@ -237,6 +303,12 @@ def create_personality_score(
             aggressive_score=aggressive_score,
             balanced_score=balanced_score,
             conservative_score=conservative_score,
+            aggression_score=aggression_score,
+            cooperation_score=cooperation_score,
+            emotion_score=emotion_score,
+            risk_score=risk_score,
+            decision_score=decision_score,
+            personality_tags=personality_tags,
         )
         session.add(score)
         session.commit()
@@ -268,6 +340,12 @@ def update_personality_score(
     aggressive_score: Optional[float] = None,
     balanced_score: Optional[float] = None,
     conservative_score: Optional[float] = None,
+    aggression_score: Optional[float] = None,
+    cooperation_score: Optional[float] = None,
+    emotion_score: Optional[float] = None,
+    risk_score: Optional[float] = None,
+    decision_score: Optional[float] = None,
+    personality_tags: Optional[str] = None,
 ) -> Optional[PersonalityScore]:
     """更新指定评分字段；不存在时返回 None。"""
     with SessionLocal() as session:
@@ -280,6 +358,16 @@ def update_personality_score(
             score.balanced_score = balanced_score
         if conservative_score is not None:
             score.conservative_score = conservative_score
+        for field, value in {
+            "aggression_score": aggression_score,
+            "cooperation_score": cooperation_score,
+            "emotion_score": emotion_score,
+            "risk_score": risk_score,
+            "decision_score": decision_score,
+            "personality_tags": personality_tags,
+        }.items():
+            if value is not None:
+                setattr(score, field, value)
         score.updated_at = datetime.utcnow()
         session.commit()
         return score
@@ -296,12 +384,54 @@ def delete_personality_score(score_id: int) -> bool:
         return True
 
 
+def create_game_action_record(
+    game_id: str,
+    player_id: str,
+    action_type: str,
+    **fields: Any,
+) -> GameActionRecord:
+    """实时保存一次玩家操作，并同步最常用的玩家统计计数。"""
+    with SessionLocal() as session:
+        record = GameActionRecord(game_id=game_id, player_id=player_id, action_type=action_type, **fields)
+        session.add(record)
+        statistics = session.get(PlayerStatistics, player_id)
+        if statistics is None:
+            statistics = PlayerStatistics(player_id=player_id)
+            session.add(statistics)
+        previous_total = statistics.total_decisions
+        statistics.total_decisions += 1
+        decision_time = float(fields.get("decision_time", 0.0) or 0.0)
+        statistics.avg_decision_time = (
+            (statistics.avg_decision_time * previous_total + decision_time) / statistics.total_decisions
+        )
+        if decision_time < 4.0:
+            statistics.quick_decisions += 1
+        if bool(fields.get("is_bomb", False)):
+            statistics.total_bombs_used += 1
+        if bool(fields.get("partner_action", False)):
+            statistics.protect_partner_count += 1
+        statistics.updated_at = datetime.utcnow()
+        session.commit()
+        return record
+
+
+def list_game_action_records(player_id: Optional[str] = None, limit: int = 1000) -> List[GameActionRecord]:
+    """查询动作明细，可用于跨玩家百分位计算。"""
+    with SessionLocal() as session:
+        statement = select(GameActionRecord)
+        if player_id is not None:
+            statement = statement.where(GameActionRecord.player_id == player_id)
+        return list(session.scalars(statement.order_by(GameActionRecord.id.asc()).limit(limit)))
+
+
 __all__ = [
     "DATABASE_PATH",
     "DATABASE_URL",
     "GameRecord",
     "BehaviorLog",
     "PersonalityScore",
+    "GameActionRecord",
+    "PlayerStatistics",
     "SessionLocal",
     "init_db",
     "create_game_record",
@@ -319,4 +449,6 @@ __all__ = [
     "list_personality_scores",
     "update_personality_score",
     "delete_personality_score",
+    "create_game_action_record",
+    "list_game_action_records",
 ]

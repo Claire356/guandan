@@ -14,6 +14,7 @@ from .turn import Turn
 from ..database.sqlite import (
     BehaviorLog,
     create_behavior_log,
+    create_game_action_record,
     create_game_record,
     update_game_record,
 )
@@ -134,21 +135,41 @@ class BehaviorTracker:
             "card_type": card_type,
             "turn": turn.to_dict(),
         }
-        return create_behavior_log(
+        log = create_behavior_log(
             self.game_record_id,
             ai.player.name,
             "game_step",
             detail,
         )
+        create_game_action_record(
+            str(self.game_record_id),
+            ai.player.name,
+            "pass" if turn.is_pass else ("bomb" if bomb_used else "play"),
+            round_number=self.game.round_number,
+            cards_played=json.dumps([str(card) for card in turn.cards], ensure_ascii=False),
+            card_type=card_type["type"],
+            decision_time=round(thinking_time_ms / 1000, 4),
+            opponent_cards=min((len(player.hand) for player in self.game.players if player.team_id != ai.player.team_id), default=0),
+            is_bomb=int(bomb_used),
+            is_risky_play=0,
+            partner_action=int(bool(previous_player and previous_player.team_id == ai.player.team_id)),
+        )
+        return log
 
     def finish_game(self) -> None:
-        """在牌局结束时把胜者和最终状态写回游戏记录。"""
+        """结束牌局，保存最终状态并自动落库每位玩家的五维画像。"""
         update_game_record(
             self.game_record_id,
             state=self.game.to_dict(),
             winner=self.game.winner.name if self.game.winner else None,
             ended_at=datetime.utcnow(),
         )
+        # 延迟导入避免行为采集器和评分器在模块加载阶段相互依赖。
+        from .personality_scoring import PersonalityScoringEngine
+
+        scorer = PersonalityScoringEngine()
+        for player in self.game.players:
+            scorer.score_and_save(player.name, self.game_record_id)
 
     @staticmethod
     def detail(log: BehaviorLog) -> Dict[str, object]:

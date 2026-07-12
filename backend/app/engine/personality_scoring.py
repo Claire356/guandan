@@ -1,6 +1,7 @@
 """根据 BehaviorLog 自动累计五维评分并映射七种人格。"""
 
 import json
+from statistics import pvariance
 from typing import Dict, Iterable, List, Mapping, Optional, Tuple
 
 from sqlalchemy import select
@@ -17,6 +18,18 @@ from ..database.sqlite import (
     PersonalityScore,
     SessionLocal,
     create_personality_score,
+)
+from .weight_config import (
+    BASE_SCORE as PROFILE_BASE_SCORE,
+    COMPONENT_WEIGHTS,
+    DIMENSIONS as PROFILE_DIMENSIONS,
+    EVENT_WEIGHTS as PROFILE_EVENT_WEIGHTS,
+    EXPLANATIONS,
+    LABELS,
+    PERSONALITY_BOUNDARY,
+    SCORE_MAX,
+    SCORE_MIN,
+    TIME_THRESHOLDS_MS,
 )
 
 
@@ -47,6 +60,43 @@ class PersonalityScoringEngine:
     def _clamp(value: float) -> float:
         """保证任何维度始终位于 0～100。"""
         return max(0.0, min(100.0, value))
+
+    @staticmethod
+    def percentile_rank(value: float, all_values: Iterable[float]) -> float:
+        """计算 0～1 百分位；没有总体样本时返回中性 0.5。"""
+        values = list(all_values)
+        if not values:
+            return 0.5
+        return sum(candidate <= value for candidate in values) / len(values)
+
+    @staticmethod
+    def _assemble_profile(components: Mapping[str, Mapping[str, float]]) -> Dict[str, object]:
+        """按配置权重把组件分数组装成最终报告。"""
+        scores = {}
+        for dimension, values in components.items():
+            weighted = sum(values[name] * weight for name, weight in COMPONENT_WEIGHTS[dimension].items())
+            value = weighted if dimension == "decision" else 50 + (weighted - 50) * 0.8
+            scores[dimension] = max(SCORE_MIN, min(SCORE_MAX, value))
+        rounded = {key: round(value, 2) for key, value in scores.items()}
+        tags = [
+            LABELS[dimension]["high" if rounded[dimension] > PERSONALITY_BOUNDARY else "low"]
+            for dimension in PROFILE_DIMENSIONS
+        ]
+        return {
+            "scores": rounded,
+            "tags": tags,
+            "dimensions": [
+                {
+                    "key": dimension,
+                    "score": rounded[dimension],
+                    "tag": tag,
+                    "explanation": EXPLANATIONS[tag],
+                    "components": {name: round(value, 2) for name, value in components[dimension].items()},
+                }
+                for dimension, tag in zip(PROFILE_DIMENSIONS, tags)
+            ],
+            "overall_score": round(sum(rounded.values()) / len(rounded), 1),
+        }
 
     def reset(self) -> None:
         """恢复全部维度的配置基准分。"""
@@ -181,13 +231,154 @@ class PersonalityScoringEngine:
     ) -> PersonalityScore:
         """评分后写入现有 personality_score 表并返回 ORM 记录。"""
         scores = self.score_player(player_name, game_record_id)
+        profile = self.profile_for_player(player_name, game_record_id)
         return create_personality_score(
             player_name=player_name,
             aggressive_score=scores["attack"],
             balanced_score=(scores["cooperation"] + scores["emotion"]) / 2,
             conservative_score=100.0 - scores["risk"],
             game_record_id=game_record_id,
+            aggression_score=profile["scores"]["aggression"],
+            cooperation_score=profile["scores"]["cooperation"],
+            emotion_score=profile["scores"]["emotion"],
+            risk_score=profile["scores"]["risk"],
+            decision_score=profile["scores"]["decision"],
+            personality_tags="|".join(profile["tags"]),
         )
+
+    @staticmethod
+    def _profile_events(detail: Mapping[str, object]) -> List[str]:
+        """把行为日志转换为新版五维画像事件，字段缺失时保持中性。"""
+        events: List[str] = []
+        thinking_time = float(detail.get("thinking_time_ms", 0.0) or 0.0)
+        direct_flags = {
+            "bomb_used": "bomb_used",
+            "control_contested": "control_contested",
+            "active_attack": "active_attack",
+            "played_over_partner": "played_over_partner",
+            "protected_partner": "protected_partner",
+            "feed_succeeded": "feed_succeeded",
+            "split_bomb_for_partner": "split_bomb_for_partner",
+            "yielded_control": "yielded_control",
+            "speed_changed_after_loss": "speed_changed_after_loss",
+            "speed_changed_after_win": "speed_changed_after_win",
+            "high_decision_variance": "high_decision_variance",
+            "critical_play_fluctuation": "critical_play_fluctuation",
+            "early_big_card": "early_big_card",
+            "late_small_card": "late_small_card",
+            "high_card_used": "high_card_used",
+            "risky_play": "risky_play",
+            "rapid_streak": "rapid_streak",
+        }
+        for field, event in direct_flags.items():
+            if bool(detail.get(field, False)):
+                events.append(event)
+        if bool(detail.get("bomb_used", False)) and bool(detail.get("critical_decision", False)):
+            events.append("critical_bomb")
+        if bool(detail.get("helped_partner", False)) or (
+            bool(detail.get("passed", False)) and bool(detail.get("partner_has_control", False))
+        ):
+            events.append("partner_pass")
+        if bool(detail.get("split_cards", False)):
+            events.append("split_cards")
+        if thinking_time and thinking_time <= TIME_THRESHOLDS_MS["decisive"]:
+            events.append("decision_under_4s")
+        if thinking_time > TIME_THRESHOLDS_MS["slow"]:
+            events.append("slow_decision")
+        if bool(detail.get("critical_decision", False)) and thinking_time <= TIME_THRESHOLDS_MS["critical_fast"]:
+            events.append("fast_critical_decision")
+        return events
+
+    def profile_logs(self, logs: Iterable[BehaviorLog]) -> Dict[str, object]:
+        """按附件比例聚合五维画像；没有样本时所有维度保持 50 分。"""
+        details = []
+        for log in logs:
+            if log.behavior_type != "game_step":
+                continue
+            try:
+                detail = json.loads(log.detail_json)
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if isinstance(detail, dict):
+                details.append(detail)
+
+        if not details:
+            components = {dimension: {} for dimension in PROFILE_DIMENSIONS}
+            # 无样本时明确返回五个 50 分，避免空组件参与加权。
+            return {
+                "scores": {dimension: PROFILE_BASE_SCORE for dimension in PROFILE_DIMENSIONS},
+                "tags": [LABELS[dimension]["low"] for dimension in PROFILE_DIMENSIONS],
+                "dimensions": [
+                    {"key": dimension, "score": PROFILE_BASE_SCORE, "tag": LABELS[dimension]["low"],
+                     "explanation": EXPLANATIONS[LABELS[dimension]["low"]], "components": {}}
+                    for dimension in PROFILE_DIMENSIONS
+                ],
+                "overall_score": PROFILE_BASE_SCORE,
+            }
+        else:
+            total = len(details)
+            times = [float(item.get("thinking_time_ms", 0.0) or 0.0) / 1000 for item in details]
+            ratio = lambda field: sum(bool(item.get(field, False)) for item in details) / total * 100
+            bomb_rate = ratio("bomb_used")
+            quick_ratio = sum(value < 4 for value in times) / total * 100
+            components = {
+                "aggression": {
+                    "bomb_frequency": bomb_rate,
+                    "override_partner": ratio("played_over_partner"),
+                    "play_speed": quick_ratio,
+                    "power_struggle": ratio("control_contested") or ratio("active_attack"),
+                },
+                "cooperation": {
+                    "protect_partner": ratio("protected_partner"),
+                    "let_partner_play": ratio("helped_partner") or ratio("yielded_control"),
+                    "feed_success": ratio("feed_succeeded"),
+                    "break_bomb_for_partner": ratio("split_bomb_for_partner"),
+                },
+                "emotion": {
+                    "loss_impact": ratio("speed_changed_after_loss"),
+                    "win_impact": ratio("speed_changed_after_win"),
+                    "speed_variance": min(100.0, pvariance(times) * 10 if len(times) > 1 else 0.0),
+                },
+                "risk": {
+                    "bomb_frequency": bomb_rate,
+                    "risky_big_cards": ratio("early_big_card") or ratio("risky_play"),
+                    "risky_small_cards": ratio("late_small_card"),
+                    "big_card_frequency": ratio("high_card_used"),
+                    "break_combinations": ratio("split_cards"),
+                },
+                "decision": {"quick_decision_ratio": quick_ratio},
+            }
+        return self._assemble_profile(components)
+
+    def profile_for_player(
+        self,
+        player_name: str,
+        game_record_id: Optional[int] = None,
+    ) -> Dict[str, object]:
+        """从 SQLite 读取指定玩家行为并生成新版人格报告。"""
+        with SessionLocal() as session:
+            statement = select(BehaviorLog).where(BehaviorLog.behavior_type == "game_step")
+            if game_record_id is not None:
+                statement = statement.where(BehaviorLog.game_record_id == game_record_id)
+            all_logs = list(session.scalars(statement.order_by(BehaviorLog.id.asc())))
+        grouped: Dict[str, List[BehaviorLog]] = {}
+        for log in all_logs:
+            grouped.setdefault(log.player_name, []).append(log)
+        target = self.profile_logs(grouped.get(player_name, []))
+        population = [self.profile_logs(items) for items in grouped.values()]
+        if len(population) < 2 or not target["dimensions"]:
+            return target
+        percentile_components: Dict[str, Dict[str, float]] = {}
+        for dimension in target["dimensions"]:
+            key = dimension["key"]
+            percentile_components[key] = {}
+            for component, value in dimension["components"].items():
+                peers = [
+                    next(item for item in report["dimensions"] if item["key"] == key)["components"].get(component, 0.0)
+                    for report in population
+                ]
+                percentile_components[key][component] = self.percentile_rank(value, peers) * 100
+        return self._assemble_profile(percentile_components)
 
 
 __all__ = ["PersonalityScoringEngine", "ScoreResult"]

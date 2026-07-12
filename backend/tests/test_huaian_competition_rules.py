@@ -57,33 +57,33 @@ class HuaianCompetitionRuleTests(unittest.TestCase):
     def test_four_jokers_make_joker_bomb(self):
         self.assertEqual(identify_card_type([joker("red"), joker("red"), joker("black"), joker("black")], "7")["type"], JOKER_BOMB)
 
-    def test_lowest_straight(self):
+    def test_a2345_is_not_a_straight(self):
         cards = [card(rank, suit) for rank, suit in zip(("A", "2", "3", "4", "5"), ("♠", "♥", "♣", "♦", "♠"))]
-        self.assertEqual(identify_card_type(cards, "7"), {"type": STRAIGHT, "level": 5, "length": 5})
+        self.assertEqual(identify_card_type(cards, "7")["type"], "invalid")
 
     def test_highest_straight(self):
         self.assertEqual(identify_card_type([card(rank) for rank in ("10", "J", "Q", "K", "A")], "7")["level"], 14)
 
-    def test_lowest_three_pairs(self):
+    def test_three_pairs_cannot_contain_two(self):
         cards = [card(rank, suit) for rank in ("A", "2", "3") for suit in ("♠", "♥")]
-        self.assertEqual(identify_card_type(cards, "7")["type"], DOUBLE_SEQUENCE)
+        self.assertEqual(identify_card_type(cards, "7")["type"], "invalid")
 
     def test_highest_three_pairs(self):
         cards = [card(rank, suit) for rank in ("Q", "K", "A") for suit in ("♠", "♥")]
         self.assertEqual(identify_card_type(cards, "7")["level"], 14)
 
-    def test_lowest_steel_plate(self):
+    def test_steel_plate_cannot_contain_two(self):
         cards = [card(rank, suit) for rank in ("A", "2") for suit in ("♠", "♥", "♣")]
-        self.assertEqual(identify_card_type(cards, "7")["type"], STEEL_PLATE)
+        self.assertEqual(identify_card_type(cards, "7")["type"], "invalid")
 
-    def test_six_bomb_beats_straight_flush(self):
-        self.assertGreater(compare({"type": BOMB, "level": 3, "length": 6}, {"type": STRAIGHT_FLUSH, "level": 14, "length": 5}), 0)
+    def test_four_bomb_beats_straight_flush(self):
+        self.assertGreater(compare({"type": BOMB, "level": 3, "length": 4}, {"type": STRAIGHT_FLUSH, "level": 14, "length": 5}), 0)
 
-    def test_straight_flush_beats_five_bomb(self):
-        self.assertGreater(compare({"type": STRAIGHT_FLUSH, "level": 5, "length": 5}, {"type": BOMB, "level": 15, "length": 5}), 0)
+    def test_straight_flush_beats_normal_type(self):
+        self.assertGreater(compare({"type": STRAIGHT_FLUSH, "level": 5, "length": 5}, {"type": STRAIGHT, "level": 14, "length": 5}), 0)
 
-    def test_five_bomb_beats_four_bomb(self):
-        self.assertGreater(compare({"type": BOMB, "level": 2, "length": 5}, {"type": BOMB, "level": 15, "length": 4}), 0)
+    def test_five_same_is_not_bomb(self):
+        self.assertEqual(identify_card_type([card("5")] * 5, "7")["type"], "invalid")
 
     def test_upgrade_by_partner_finish(self):
         self.assertEqual(Game.upgrade_steps(2), 3)
@@ -119,10 +119,12 @@ class HuaianCompetitionRuleTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             game.exchange_tribute(giver, receiver, wild, returned)
 
-    def test_two_red_jokers_resist_tribute(self):
+    def test_two_red_jokers_must_belong_to_same_player(self):
         first, second = Player("first"), Player("second")
         first.receive_cards([joker("red")])
         second.receive_cards([joker("red")])
+        self.assertFalse(Game.can_resist_tribute([first, second]))
+        first.receive_cards([joker("red")])
         self.assertTrue(Game.can_resist_tribute([first, second]))
 
 

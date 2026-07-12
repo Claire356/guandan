@@ -20,7 +20,7 @@ import { computed } from 'vue'
 import { useGameStore } from '@/store/game'
 const store = useGameStore()
 const result = computed(() => store.result || { rank: 1, score: 86, title: '头游', bombCount: 2, passCount: 5 })
-const goReport = () => uni.navigateTo({ url: '/pages/report/index' })
+const goReport = async () => { await store.loadPersonalityReport(); uni.navigateTo({ url: '/pages/report/index' }) }
 const restart = () => uni.redirectTo({ url: '/pages/training/index' })
 </script>
 

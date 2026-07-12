@@ -1,4 +1,5 @@
-const CACHE_NAME = 'ai-guandan-training-v1'
+// 规则与背景音乐修复后升级缓存版本，激活时自动清理旧版资源。
+const CACHE_NAME = 'ai-guandan-training-v2'
 const APP_SHELL = ['/', '/manifest.webmanifest', '/icons/app-icon-192.png', '/icons/app-icon-512.png']
 
 self.addEventListener('install', event => {
