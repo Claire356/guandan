@@ -21,6 +21,20 @@
         <text v-if="!tableActions.length" class="empty-desk">等待首出</text>
         <text class="last-play">{{ lastPlayerText }}</text>
       </view>
+      <scroll-view v-if="tableActions.length" scroll-y class="played-history" :scroll-top="historyScrollTop">
+        <view
+          v-for="(action,index) in tableActions"
+          :key="`action-${index}`"
+          class="played-action"
+          :class="{ latest: index === tableActions.length - 1 }"
+        >
+          <text class="action-player">{{ action.player }}</text>
+          <view v-if="action.cards?.length" class="history-cards">
+            <PlayingCard v-for="(card,cardIndex) in action.cards" :key="`${index}-${cardIndex}`" :card="card" disabled />
+          </view>
+          <text v-else class="history-pass">PASS</text>
+        </view>
+      </scroll-view>
       <view class="turn-pill">{{ turnText }}</view>
     </view>
 
@@ -47,6 +61,7 @@ import { useGameStore } from '@/store/game'
 import PlayingCard from '@/components/PlayingCard.vue'
 const store = useGameStore()
 const tableActions = computed(() => store.game?.state?.table_plays || [])
+const historyScrollTop = computed(() => tableActions.value.length * 120)
 const playerNames = ['你', 'AI-1', 'AI-2', 'AI-3']
 const playPosition = { '你': 'bottom-play', 'AI-1': 'left-play', 'AI-2': 'top-play', 'AI-3': 'right-play' }
 const actionFor = name => [...tableActions.value].reverse().find(action => action.player === name)
@@ -74,6 +89,7 @@ const finish = () => { store.finishDemo(); uni.navigateTo({ url: '/pages/settlem
 .desk-center { position: absolute; left: 50%; top: 49%; transform: translate(-50%,-50%); text-align: center; }.desk-label,.last-play { display: block; font-size: 22rpx; color: rgba(255,255,255,.68); }.empty-desk { display:block; margin:18rpx 0; color:rgba(255,255,255,.55); font-size:25rpx; }
 .table-play { position:absolute; z-index:2; min-width:90rpx; min-height:74rpx; display:flex; align-items:center; justify-content:center; }.top-play { top:120rpx; left:50%; transform:translateX(-50%); }.left-play { left:105rpx; top:285rpx; }.right-play { right:105rpx; top:285rpx; }.bottom-play { bottom:92rpx; left:50%; transform:translateX(-50%); }
 .play-cards { display:flex; justify-content:center; }.play-cards :deep(.card) { width:54rpx; height:78rpx; flex-basis:54rpx; padding:6rpx; margin-left:-16rpx; border-radius:7rpx; }.play-cards :deep(.card:first-child) { margin-left:0; }.play-cards :deep(.card__label) { font-size:20rpx; }.play-cards :deep(.card__suit) { margin-top:4rpx; font-size:18rpx; }.pass-mark { padding:6rpx 12rpx; border-radius:10rpx; background:rgba(0,0,0,.2); color:rgba(255,255,255,.72); font-size:21rpx; font-weight:700; }
+.played-history { position:absolute; z-index:3; left:50%; top:50%; width:330rpx; height:250rpx; transform:translate(-50%,-50%); padding:8rpx; border-radius:16rpx; background:rgba(4,54,35,.34); box-sizing:border-box; }.played-action { display:flex; align-items:center; min-height:50rpx; margin:5rpx 0; padding:5rpx 8rpx; border:2rpx solid transparent; border-radius:10rpx; opacity:.72; }.played-action.latest { border-color:#f4d66f; background:rgba(244,214,111,.15); box-shadow:0 0 16rpx rgba(244,214,111,.55); opacity:1; }.action-player { width:58rpx; flex:0 0 58rpx; color:#fff; font-size:18rpx; font-weight:700; }.history-cards { display:flex; min-width:0; }.history-cards :deep(.card) { width:42rpx; height:58rpx; flex-basis:42rpx; padding:4rpx; margin-left:-12rpx; border-radius:5rpx; }.history-cards :deep(.card:first-child) { margin-left:0; }.history-cards :deep(.card__label) { font-size:16rpx; }.history-cards :deep(.card__suit) { margin-top:2rpx; font-size:14rpx; }.played-action.latest .history-cards :deep(.card) { border-color:#f4d66f; box-shadow:0 0 10rpx rgba(244,214,111,.8); transform:translateY(-3rpx); }.history-pass { color:rgba(255,255,255,.7); font-size:18rpx; font-weight:700; }
 .turn-pill { position: absolute; bottom: 28rpx; left: 50%; transform: translateX(-50%); padding: 10rpx 26rpx; border-radius: 99rpx; color: #3d3216; background: #e4c66d; font-size: 24rpx; font-weight: 700; }
 .hand-panel { margin-top: -12rpx; padding: 28rpx 24rpx 22rpx; border-radius: 30rpx 30rpx 0 0; background: #f3f7f4; color: #18372a; }.hand-title { font-weight: 800; }
 .hand-scroll { width: 100%; height: 164rpx; margin-top: 24rpx; }.hand-row { min-width: max-content; display: flex; gap: 7rpx; padding: 22rpx 4rpx; }
