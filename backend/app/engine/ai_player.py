@@ -1,28 +1,25 @@
 """可直接接入 Game 的规则型掼蛋 AI。"""
 
-from collections import Counter
-from typing import Dict, List, Optional, Sequence, Tuple
+import logging
+from typing import List, Optional, Tuple
 
 from .card import Card
 from .card_type import (
     BOMB,
     JOKER_BOMB,
     STRAIGHT_FLUSH,
-    RANKS,
-    STRAIGHT_WINDOWS,
-    PAIR_WINDOWS,
-    STEEL_WINDOWS,
     CardTypeResult,
-    compare,
     identify_card_type,
     is_wild_card,
 )
 from .game import Game
 from .player import Player
 from .turn import Turn
+from .validator import get_all_legal_moves, validate_play
 
 
 BOMB_TYPES = {BOMB, STRAIGHT_FLUSH, JOKER_BOMB}
+logger = logging.getLogger(__name__)
 
 
 class RuleAIPlayer:
@@ -33,120 +30,19 @@ class RuleAIPlayer:
     def __init__(self, game: Game, player: Player) -> None:
         self.game = game
         self.player = player
+        self.last_legal_moves: List[List[Card]] = []
 
     def _current_card_type(self) -> Optional[CardTypeResult]:
         """从当前 Game 中读取桌面牌型；新一轮主动出牌时返回 None。"""
         round_obj = self.game.current_round
         if round_obj is None or round_obj.last_played_cards is None:
             return None
-        return identify_card_type(round_obj.last_played_cards, self.game.state.current_level)
-
-    def _add_candidate(self, candidates: Dict[Tuple[Card, ...], List[Card]], cards: Sequence[Card]) -> None:
-        """只保留能被现有牌型模块识别的候选，并去除重复候选。"""
-        candidate = list(cards)
-        if candidate and identify_card_type(candidate, self.game.state.current_level)["type"] != "invalid":
-            candidates.setdefault(tuple(candidate), candidate)
-
-    def _all_candidates(self) -> List[List[Card]]:
-        """按牌点分组生成当前手牌能组成的全部核心牌型。
-
-        这里不使用全组合穷举，避免在 27 张手牌上产生指数级开销。生成规则覆盖
-        单张、对子、三张、三带二、顺子、连对、钢板、炸弹、同花顺和王炸。
-        """
-        candidates: Dict[Tuple[Card, ...], List[Card]] = {}
-        level = self.game.state.current_level
-        wilds = [card for card in self.player.hand if is_wild_card(card, level)]
-        normal = [card for card in self.player.hand if card not in wilds]
-
-        def compose(requirements: Dict[str, int], suit: Optional[str] = None) -> List[Card]:
-            chosen: List[Card] = []
-            missing = 0
-            for rank, count in requirements.items():
-                available = [card for card in normal if card.rank == rank and (suit is None or card.suit == suit)]
-                chosen.extend(available[:count])
-                missing += max(0, count - len(available))
-            return chosen + wilds[:missing] if missing <= len(wilds) else []
-
-        # 每张实体牌均可作为单张；逢人配单独出时按级牌使用。
-        for card in self.player.hand:
-            self._add_candidate(candidates, [card])
-
-        # 对子、三张及4至10张炸弹均允许红桃级牌补足。
-        for rank in RANKS:
-            for count in range(2, 11):
-                cards = compose({rank: count})
-                if len(cards) == count:
-                    self._add_candidate(candidates, cards)
-
-        # 大小王只可自然组成对子；逢人配不能代替王。
-        for color in ("black", "red"):
-            jokers = [card for card in normal if card.is_joker and card.color == color]
-            if len(jokers) >= 2:
-                self._add_candidate(candidates, jokers[:2])
-
-        # 三带二允许两张逢人配在三张与对子之间按合法需要分配。
-        for triple_rank in RANKS:
-            for pair_rank in RANKS:
-                if triple_rank != pair_rank:
-                    cards = compose({triple_rank: 3, pair_rank: 2})
-                    if len(cards) == 5:
-                        self._add_candidate(candidates, cards)
-
-        for window in STRAIGHT_WINDOWS:
-            cards = compose({rank: 1 for rank in window})
-            if len(cards) == 5:
-                self._add_candidate(candidates, cards)
-        for window in PAIR_WINDOWS:
-            cards = compose({rank: 2 for rank in window})
-            if len(cards) == 6:
-                self._add_candidate(candidates, cards)
-        for window in STEEL_WINDOWS:
-            cards = compose({rank: 3 for rank in window})
-            if len(cards) == 6:
-                self._add_candidate(candidates, cards)
-
-        # 同花顺中逢人配可补成目标花色，但不能变成大小王。
-        for suit in ("♠", "♥", "♣", "♦"):
-            for window in STRAIGHT_WINDOWS:
-                cards = compose({rank: 1 for rank in window}, suit=suit)
-                if len(cards) == 5:
-                    self._add_candidate(candidates, cards)
-
-        # 两副牌中的两张小王和两张大王共同组成最高王炸。
-        jokers = [card for card in normal if card.is_joker]
-        joker_counts = Counter(card.value for card in jokers)
-        if sorted(joker_counts.values()) == [2, 2]:
-            self._add_candidate(candidates, jokers)
-        return list(candidates.values())
+        return round_obj.last_card_type or identify_card_type(round_obj.last_played_cards, self.game.state.current_level)
 
     def _legal_candidates(self, current_card_type: Optional[CardTypeResult]) -> List[List[Card]]:
-        """过滤出 Game 可执行且能严格压过当前桌面牌型的候选。
-
-        完整牌型模块的覆盖范围大于现有 Round。为了不修改已经稳定的 Round，AI
-        接入 Game 时只提交 Round 当前能执行的候选，避免推荐合法却无法落地的动作。
-        """
-        round_obj = self.game.current_round
-        candidates = self._all_candidates()
-        if round_obj is not None:
-            candidates = [cards for cards in candidates if round_obj._detect_pattern(cards) is not None]
-        if current_card_type is None:
-            return candidates
-        if round_obj is not None and round_obj.last_played_cards is not None:
-            # 最终以接入对象自身的压制判断为准，保证 recommend 的结果可由 play 落地。
-            return [
-                cards
-                for cards in candidates
-                if round_obj._is_valid_against_previous(
-                    round_obj._detect_pattern(cards),
-                    round_obj.last_played_cards,
-                    cards,
-                )
-            ]
-        return [
-            cards
-            for cards in candidates
-            if compare(identify_card_type(cards, self.game.state.current_level), current_card_type) > 0
-        ]
+        """AI唯一合法动作来源：统一验证器get_all_legal_moves。"""
+        self.last_legal_moves = get_all_legal_moves(self.player.hand, current_card_type, self.game.state.current_level)
+        return self.last_legal_moves
 
     def _score(self, cards: List[Card], current_card_type: Optional[CardTypeResult]) -> Tuple[int, ...]:
         """子类实现策略评分，元组越大表示越优先。"""
@@ -169,11 +65,13 @@ class RuleAIPlayer:
             current_card_type = self._current_card_type()
         candidates = self._legal_candidates(current_card_type)
         if not candidates:
+            logger.debug("桌面=%s 最终推荐=PASS 原因=无合法动作", current_card_type)
             return []
         # 队友掌握牌权时不反压；唯一例外是当前一手可以直接出完，优先完成走牌。
         if current_card_type is not None and self._partner_has_control():
             finishing = [cards for cards in candidates if len(cards) == len(self.player.hand)]
             if not finishing:
+                logger.debug("桌面=%s 最终推荐=PASS 原因=队友控权", current_card_type)
                 return []
             candidates = finishing
 
@@ -188,7 +86,25 @@ class RuleAIPlayer:
             best_wild = max(wild_candidates, key=lambda cards: self._score(cards, current_card_type))
             if len(best_wild) > len(best):
                 best = best_wild
-        return best
+
+        # 最终推荐必须再次走 validate_play → compare；失败候选立即剔除并重新评分。
+        while candidates:
+            result = validate_play(self.player.hand, current_card_type, best, self.game.state.current_level)
+            logger.debug(
+                "桌面=%s AI候选=%s compare校验=%s 最终推荐=%s",
+                current_card_type,
+                [str(card) for card in best],
+                result["reason"],
+                [str(card) for card in best] if result["valid"] else "RETRY",
+            )
+            if result["valid"]:
+                return best
+            candidates.remove(best)
+            if not candidates:
+                break
+            best = max(candidates, key=lambda cards: self._score(cards, current_card_type))
+        logger.error("AI所有候选均未通过最终校验，强制PASS；桌面=%s", current_card_type)
+        return []
 
     def recommend_with_reason(self) -> dict:
         """输出可解释推荐，同时兼顾队友、炸弹、牌权、残局、级牌与逢人配。"""
@@ -261,6 +177,7 @@ class RuleAIPlayer:
         # 连续三家过牌后，最后出牌者重新获得主动权，清空桌面进入新墩。
         if len(round_obj.turn_history) >= 3 and all(item.is_pass for item in round_obj.turn_history[-3:]):
             round_obj.last_played_cards = None
+            round_obj.last_card_type = None
             round_obj.last_player = None
             round_obj.phase = "waiting"
             self.game.state.last_played_cards = None

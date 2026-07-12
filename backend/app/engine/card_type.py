@@ -17,6 +17,10 @@ STEEL_PLATE = "steel_plate"
 BOMB = "bomb"
 STRAIGHT_FLUSH = "straight_flush"
 JOKER_BOMB = "joker_bomb"
+VALID_CARD_TYPES = {
+    SINGLE, PAIR, TRIPLE, TRIPLE_WITH_PAIR, STRAIGHT, DOUBLE_SEQUENCE,
+    STEEL_PLATE, BOMB, STRAIGHT_FLUSH, JOKER_BOMB,
+}
 
 RANKS = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"]
 SUITS = ["♠", "♥", "♣", "♦"]
@@ -185,6 +189,14 @@ def compare(card_type1: CardTypeResult, card_type2: CardTypeResult) -> int:
         raise ValueError("牌型结果必须包含 type、level 和 length")
     if card_type1["type"] == INVALID or card_type2["type"] == INVALID:
         raise ValueError("无效牌型不能比较")
+    expected_lengths = {
+        SINGLE: {1}, PAIR: {2}, TRIPLE: {3}, TRIPLE_WITH_PAIR: {5},
+        STRAIGHT: {5}, DOUBLE_SEQUENCE: {6}, STEEL_PLATE: {6},
+        STRAIGHT_FLUSH: {5}, JOKER_BOMB: {4}, BOMB: set(range(4, 11)),
+    }
+    for result in (card_type1, card_type2):
+        if result["type"] not in VALID_CARD_TYPES or result["length"] not in expected_lengths[result["type"]]:
+            raise ValueError("牌型名称或长度不符合掼蛋规则")
     bombs = {BOMB, STRAIGHT_FLUSH, JOKER_BOMB}
     bomb1, bomb2 = card_type1["type"] in bombs, card_type2["type"] in bombs
     if bomb1 or bomb2:
@@ -201,5 +213,5 @@ __all__ = [
     "INVALID", "SINGLE", "PAIR", "TRIPLE", "TRIPLE_WITH_PAIR", "STRAIGHT",
     "DOUBLE_SEQUENCE", "STEEL_PLATE", "BOMB", "STRAIGHT_FLUSH", "JOKER_BOMB",
     "CardTypeResult", "card_strength", "is_wild_card", "identify_all_card_types",
-    "identify_card_type", "get_card_type", "compare",
+    "identify_card_type", "get_card_type", "compare", "VALID_CARD_TYPES",
 ]

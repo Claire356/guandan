@@ -2,7 +2,7 @@ import unittest
 
 from backend.app.engine.card import Card
 from backend.app.engine.card_type import identify_card_type
-from backend.app.engine.validator import validate_play
+from backend.app.engine.validator import get_all_legal_moves, validate_play
 
 
 SUITS = ["♠", "♥", "♣", "♦"]
@@ -58,6 +58,19 @@ class ValidatorTests(unittest.TestCase):
     def test_30_result_has_exact_fields(self): self.assertEqual(set(self.validate([3], [3])), {"valid", "reason", "card_type"})
     def test_31_invalid_hand_object_is_rejected(self): self.assertFalse(validate_play([object()], None, make_cards([3]))["valid"])
     def test_32_invalid_play_object_is_rejected(self): self.assertFalse(validate_play(make_cards([3]), None, [object()])["valid"])
+    def test_33_get_all_legal_moves_only_returns_cards_that_beat_table(self):
+        hand = make_cards([3, 3, 3, 4, 4, 4, 4, 5, 5])
+        current = table([3, 3, 3, 4, 4])
+        moves = get_all_legal_moves(hand, current)
+        self.assertTrue(moves)
+        self.assertTrue(all(validate_play(hand, current, move)["valid"] for move in moves))
+        self.assertTrue(any(identify_card_type(move)["type"] == "triple_with_pair" and identify_card_type(move)["level"] == 4 for move in moves))
+    def test_34_get_all_legal_moves_logs_compare_and_pass(self):
+        with self.assertLogs("backend.app.engine.validator", level="DEBUG") as captured:
+            get_all_legal_moves(make_cards([3, 4]), table([4]))
+        output = " ".join(captured.output)
+        self.assertIn("compare", output)
+        self.assertIn("PASS", output)
 
 
 if __name__ == "__main__":

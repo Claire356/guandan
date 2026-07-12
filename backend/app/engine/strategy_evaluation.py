@@ -56,6 +56,7 @@ def simulate_strategy_games(game_count: int = 100, seed: int = 20260712) -> Dict
                 game.state.current_turn_count += 1
                 if len(round_obj.turn_history) >= 3 and all(item.is_pass for item in round_obj.turn_history[-3:]):
                     round_obj.last_played_cards = None
+                    round_obj.last_card_type = None
                     round_obj.last_player = None
                     game.state.last_played_cards = None
                     game.state.last_player_name = None

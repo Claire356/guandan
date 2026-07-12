@@ -1,10 +1,26 @@
 """掼蛋出牌合法性验证。"""
 
+import logging
 from collections import Counter
-from typing import List, Optional, TypedDict
+from typing import Dict, List, Optional, Tuple, TypedDict, Union
 
 from .card import Card
-from .card_type import CardTypeResult, INVALID, compare, identify_all_card_types, identify_card_type
+from .card_type import (
+    PAIR_WINDOWS,
+    RANKS,
+    STEEL_WINDOWS,
+    STRAIGHT_WINDOWS,
+    VALID_CARD_TYPES,
+    CardTypeResult,
+    INVALID,
+    compare,
+    identify_all_card_types,
+    identify_card_type,
+    is_wild_card,
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 class ValidationResult(TypedDict):
@@ -41,13 +57,21 @@ def _is_card_type_result(card_type: object) -> bool:
         return False
     if set(("type", "level", "length")) - set(card_type):
         return False
-    return (
+    fields_valid = (
         isinstance(card_type["type"], str)
+        and card_type["type"] in VALID_CARD_TYPES
         and isinstance(card_type["level"], int)
         and not isinstance(card_type["level"], bool)
         and isinstance(card_type["length"], int)
         and not isinstance(card_type["length"], bool)
     )
+    if not fields_valid:
+        return False
+    try:
+        compare(card_type, card_type)
+    except ValueError:
+        return False
+    return True
 
 
 def validate_play(
@@ -105,4 +129,105 @@ def validate_play(
     return _validation_result(True, "出牌合法并压过当前桌面牌型", proposed_type)
 
 
-__all__ = ["ValidationResult", "validate_play"]
+def _candidate_moves(hand: List[Card], current_level: str) -> List[List[Card]]:
+    """从真实手牌生成所有结构不同的核心牌型候选，尚不判断能否压牌。"""
+    candidates: Dict[Tuple[Card, ...], List[Card]] = {}
+    wilds = [card for card in hand if is_wild_card(card, current_level)]
+    normal = list(hand)
+    for wild in wilds:
+        normal.remove(wild)
+
+    def add(cards: List[Card]) -> None:
+        if cards and identify_card_type(cards, current_level)["type"] != INVALID:
+            candidates.setdefault(tuple(cards), list(cards))
+
+    def compose(requirements: Dict[str, int], suit: Optional[str] = None) -> List[Card]:
+        chosen: List[Card] = []
+        missing = 0
+        for rank, count in requirements.items():
+            available = [card for card in normal if card.rank == rank and (suit is None or card.suit == suit)]
+            chosen.extend(available[:count])
+            missing += max(0, count - len(available))
+        return chosen + wilds[:missing] if missing <= len(wilds) else []
+
+    for card in hand:
+        add([card])
+    for rank in RANKS:
+        for count in range(2, 11):
+            cards = compose({rank: count})
+            if len(cards) == count:
+                add(cards)
+    for color in ("black", "red"):
+        jokers = [card for card in normal if card.is_joker and card.color == color]
+        if len(jokers) >= 2:
+            add(jokers[:2])
+    for triple_rank in RANKS:
+        for pair_rank in RANKS:
+            if triple_rank != pair_rank:
+                cards = compose({triple_rank: 3, pair_rank: 2})
+                if len(cards) == 5:
+                    add(cards)
+    for window in STRAIGHT_WINDOWS:
+        cards = compose({rank: 1 for rank in window})
+        if len(cards) == 5:
+            add(cards)
+    for window in PAIR_WINDOWS:
+        cards = compose({rank: 2 for rank in window})
+        if len(cards) == 6:
+            add(cards)
+    for window in STEEL_WINDOWS:
+        cards = compose({rank: 3 for rank in window})
+        if len(cards) == 6:
+            add(cards)
+    for suit in ("♠", "♥", "♣", "♦"):
+        for window in STRAIGHT_WINDOWS:
+            cards = compose({rank: 1 for rank in window}, suit=suit)
+            if len(cards) == 5:
+                add(cards)
+    jokers = [card for card in normal if card.is_joker]
+    if Counter(card.color for card in jokers) == Counter({"black": 2, "red": 2}):
+        add(jokers)
+    return list(candidates.values())
+
+
+def get_all_legal_moves(
+    hand: List[Card],
+    current_table: Optional[Union[List[Card], CardTypeResult]],
+    current_level: str = "2",
+) -> List[List[Card]]:
+    """返回当前手牌相对桌面的全部合法出牌；每个候选都必须通过validate_play和compare。"""
+    if current_table is None or current_table == []:
+        table_type: Optional[CardTypeResult] = None
+    elif isinstance(current_table, dict):
+        if not _is_card_type_result(current_table):
+            raise ValueError("当前桌面牌型无效")
+        table_type = current_table
+    elif isinstance(current_table, list) and all(isinstance(card, Card) for card in current_table):
+        table_type = identify_card_type(current_table, current_level)
+        if table_type["type"] == INVALID:
+            raise ValueError("当前桌面牌不构成合法牌型")
+    else:
+        raise ValueError("current_table 必须是桌面牌列表、牌型结果或None")
+
+    legal_moves: List[List[Card]] = []
+    for candidate in _candidate_moves(hand, current_level):
+        result = validate_play(hand, table_type, candidate, current_level)
+        candidate_type = result["card_type"]
+        comparison = "LEAD" if table_type is None else max(
+            compare(item, table_type)
+            for item in identify_all_card_types(candidate, current_level)
+            if item["type"] != INVALID
+        )
+        logger.debug(
+            "桌面=%s AI候选=%s compare=%s 结论=%s",
+            table_type,
+            [str(card) for card in candidate],
+            comparison,
+            "LEGAL" if result["valid"] else "PASS",
+        )
+        if result["valid"]:
+            legal_moves.append(candidate)
+    return legal_moves
+
+
+__all__ = ["ValidationResult", "validate_play", "get_all_legal_moves"]
