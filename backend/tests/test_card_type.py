@@ -86,6 +86,12 @@ class CardTypeComparisonTests(unittest.TestCase):
     def test_51_missing_key_raises(self):
         with self.assertRaises(ValueError):
             compare({"type": "single"}, self.result([3]))
+    def test_52_unknown_type_raises(self):
+        with self.assertRaises(ValueError):
+            compare({"type": "unknown", "level": 10, "length": 1}, self.result([4]))
+    def test_53_wrong_type_length_raises(self):
+        with self.assertRaises(ValueError):
+            compare({"type": "pair", "level": 10, "length": 3}, self.result([4, 4]))
 
 
 if __name__ == "__main__":

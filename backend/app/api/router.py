@@ -121,6 +121,7 @@ def pass_turn() -> ActionResponse:
     game.state.add_log(f"{player.name} 选择PASS")
     if len(round_obj.turn_history) >= 3 and all(item.is_pass for item in round_obj.turn_history[-3:]):
         round_obj.last_played_cards = None
+        round_obj.last_card_type = None
         round_obj.last_player = None
         round_obj.phase = "waiting"
         game.state.last_played_cards = None
