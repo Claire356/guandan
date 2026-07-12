@@ -43,6 +43,7 @@ class AIRecommendationLegality100GamesTests(unittest.TestCase):
                     game.check_winner()
                 else:
                     self.assertIsNotNone(table_type, "拥有主动出牌权时AI不能推荐PASS")
+                    self.assertIn([], ai.last_legal_moves, "PASS必须来自Legal Moves集合")
                     turn = round_obj.play_turn(player, [], is_pass=True)
                     self.assertTrue(turn.is_valid)
                     game.state.current_player_index = round_obj.current_player_index

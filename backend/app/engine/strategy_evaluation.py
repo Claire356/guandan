@@ -63,7 +63,7 @@ def simulate_strategy_games(game_count: int = 100, seed: int = 20260712) -> Dict
 
             action_type = identify_card_type(turn.cards, game.state.current_level)
             bomb_used = action_type["type"] in BOMB_TYPES
-            non_bomb_legal = [cards for cards in legal if identify_card_type(cards, game.state.current_level)["type"] not in BOMB_TYPES]
+            non_bomb_legal = [cards for cards in legal if cards and identify_card_type(cards, game.state.current_level)["type"] not in BOMB_TYPES]
             partner_control = bool(previous_player and previous_player is not player and previous_player.team_id == player.team_id)
             helped_partner = bool(turn.is_pass and partner_control)
             opponent_endgame = any(item.team_id != player.team_id and len(item.hand) <= 5 for item in game.players)

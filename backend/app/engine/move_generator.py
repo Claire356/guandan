@@ -115,6 +115,9 @@ def get_all_legal_moves(
         )
         if result["valid"]:
             legal_moves.append(candidate)
+    # 桌面已有牌时PASS始终是合法动作，用空列表作为稳定的兼容表示。
+    if table_type is not None:
+        legal_moves.append([])
     return legal_moves
 
 
