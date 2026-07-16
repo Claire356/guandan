@@ -1,15 +1,15 @@
 :root,
 page {
-  --brand: #0b5d3b;
-  --brand-light: #16784b;
-  --felt: #0f7048;
-  --gold: #d8b65b;
-  --ink: #18372a;
-  --muted: #718079;
+  --brand: #d4006a;
+  --brand-light: #c77dff;
+  --felt: #241038;
+  --gold: #ff6b9d;
+  --ink: #e8e0f0;
+  --muted: rgba(232, 224, 240, .46);
   --surface: #ffffff;
-  --background: #eef4ef;
-  --border: #dfe9e2;
-  --shadow: 0 8rpx 28rpx rgba(11, 93, 59, 0.08);
+  --background: #0c0814;
+  --border: rgba(199, 125, 255, .12);
+  --shadow: 0 12rpx 36rpx rgba(0, 0, 0, .28);
   background: var(--background);
   color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -19,14 +19,14 @@ html, body, #app, uni-app { min-height: 100%; background: var(--background); }
 view, text { box-sizing: border-box; }
 .page-shell { width: 100%; min-height: 100vh; margin: 0 auto; padding: 28rpx; background: var(--background); }
 .section-title { margin: 30rpx 0 18rpx; font-size: 32rpx; font-weight: 700; color: var(--ink); }
-.surface-card { padding: 28rpx; border: 1rpx solid rgba(11, 93, 59, .05); border-radius: 24rpx; background: #fff; box-shadow: var(--shadow); }
+.surface-card { padding: 28rpx; border: 1rpx solid var(--border); border-radius: 24rpx; background: rgba(255,255,255,.055); box-shadow: var(--shadow); }
 .primary-button { margin-top: 24rpx; }
 .muted { color: var(--muted); font-size: 26rpx; }
 .row-between { display: flex; align-items: center; justify-content: space-between; }
 .safe-bottom { padding-bottom: calc(32rpx + env(safe-area-inset-bottom)); }
 
 @media screen and (min-width: 768px) {
-  body { background: linear-gradient(135deg, #e7f0ea 0%, #f6f8f6 52%, #e5eee8 100%); }
+  body { background: linear-gradient(145deg, #09050f 0%, #160924 52%, #09050f 100%); }
   .page-shell { max-width: 980px; padding: 36px; }
   .surface-card { border-radius: 18px; }
   .section-title { margin-top: 34px; }

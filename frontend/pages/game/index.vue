@@ -2,13 +2,16 @@
   <view class="table-page safe-bottom" @touchstart="ensureBgm" @click="ensureBgm">
     <view class="table-head">
       <u-icon name="arrow-left" color="#fff" size="24" @click="back" />
-      <text>第 {{ store.game?.round_number || 1 }} 局</text>
+      <view class="round-chips">
+        <text>第 {{ store.game?.round_number || 1 }} 局</text>
+        <text class="level-chip">打 {{ currentLevel }} ♥</text>
+        <text class="style-chip">{{ strategyLabel }}</text>
+      </view>
       <view class="head-tools">
         <view class="music-toggle" @click.stop="toggleBgm"><text>{{ musicEnabled ? '♫' : '♩' }}</text></view>
-        <u-tag :text="store.offlineDemo ? '离线演示' : '在线训练'" size="mini" bgColor="rgba(255,255,255,.16)" borderColor="transparent" color="#fff" />
+        <text class="end-link" @click="finish">结束演示</text>
       </view>
     </view>
-    <view class="level-banner"><text>当前级牌</text><strong>打{{ currentLevel }}</strong></view>
 
     <view class="game-table">
       <view v-for="seat in aiSeats" :key="seat.player.name" class="player" :class="[seat.position,{ 'has-power':powerHolder === seat.player.name }]">
@@ -22,7 +25,7 @@
         <text v-else-if="actionFor(name)?.is_pass" class="pass-mark">PASS</text>
       </view>
       <view class="desk-center">
-        <text class="desk-label">本轮牌桌</text>
+        <text class="desk-label">CURRENT TABLE · 当前牌桌</text>
         <text v-if="!tableActions.length" class="empty-desk">等待首出</text>
         <text class="last-play">{{ lastPlayerText }}</text>
       </view>
@@ -43,22 +46,21 @@
           <text v-else class="history-pass">PASS</text>
         </view>
       </scroll-view>
-      <view class="turn-pill">{{ turnText }}</view>
+      <view class="turn-pill">✦ {{ turnText }}</view>
     </view>
 
     <view class="hand-panel">
-      <view class="row-between"><text class="hand-title">我的手牌</text><text class="muted">已选 {{ store.selectedIndices.length }} 张</text></view>
+      <view class="row-between"><text class="hand-title">你 · 剩余 {{ store.hand.length }} 张</text><text class="selected-count">已选 {{ store.selectedIndices.length }} 张</text></view>
       <scroll-view scroll-x class="hand-scroll">
         <view class="hand-row">
           <PlayingCard v-for="(card, index) in store.hand" :key="`${card}-${index}`" :card="card" :selected="store.selectedIndices.includes(index)" @select="store.toggleCard(index)" />
         </view>
       </scroll-view>
       <view class="actions">
-        <u-button plain color="#d8b65b" text="AI推荐" @click="goRecommend" />
-        <u-button plain color="#567064" text="PASS" :disabled="store.aiThinking" @click="pass" />
-        <u-button type="primary" color="#0b5d3b" text="出牌" :loading="store.aiThinking" :disabled="store.aiThinking" @click="play" />
+        <u-button class="recommend-btn" color="#c77dff" text="AI 推荐" @click="goRecommend" />
+        <u-button class="pass-btn" color="rgba(255,255,255,.44)" text="Pass" :disabled="store.aiThinking" @click="pass" />
+        <u-button class="play-btn" type="primary" color="#d4006a" :text="`出牌${store.selectedIndices.length ? ` (${store.selectedIndices.length})` : ''}`" :loading="store.aiThinking" :disabled="store.aiThinking || !store.selectedIndices.length" @click="play" />
       </view>
-      <u-button class="finish-link" type="primary" plain color="#0b5d3b" size="small" text="结束演示并查看结算" @click="finish" />
     </view>
   </view>
 </template>
@@ -125,6 +127,7 @@ onBeforeUnmount(() => {
 })
 const tableActions = computed(() => store.game?.state?.table_plays || [])
 const currentLevel = computed(() => store.game?.currentLevel || store.game?.state?.current_level || '2')
+const strategyLabel = computed(() => ({ aggressive:'激进型', balanced:'均衡型', conservative:'保守型' }[store.strategy] || '均衡型'))
 const powerTransfer = computed(() => store.game?.state?.power_transfer || null)
 const powerHolder = computed(() => store.game?.state?.power_holder_name || null)
 const historyScrollTop = computed(() => tableActions.value.length * 120)
@@ -182,4 +185,26 @@ const finish = () => { store.finishDemo(); uni.navigateTo({ url: '/pages/settlem
   .game-table { height: 610px; }
   .hand-panel { padding-left: 36px; padding-right: 36px; }
 }
+
+/* Figma Site 视觉层：只覆盖展示，不改变牌局状态和出牌行为。 */
+.table-page { min-height:100vh; overflow:hidden; background:linear-gradient(170deg,#0c0814,#110620 52%,#0c0814); color:#e8e0f0; }
+.table-page::before { content:"♠　♥　♦　♣"; position:fixed; z-index:0; left:50%; top:32%; transform:translate(-50%,-50%) rotate(-8deg); color:rgba(199,125,255,.035); font-size:120rpx; white-space:nowrap; pointer-events:none; }
+.table-head { position:relative; z-index:20; height:108rpx; padding:32rpx 28rpx 14rpx; gap:18rpx; border-bottom:1rpx solid rgba(199,125,255,.08); background:rgba(0,0,0,.28); backdrop-filter:blur(12px); }
+.round-chips { flex:1; display:flex; align-items:center; gap:10rpx; }
+.round-chips>text { padding:7rpx 16rpx; border-radius:99rpx; color:rgba(232,224,240,.72); background:rgba(199,125,255,.1); font-size:20rpx; font-weight:800; }
+.round-chips .level-chip { color:#ff6b9d; background:rgba(194,24,91,.14); }
+.round-chips .style-chip { color:rgba(199,125,255,.48); background:rgba(199,125,255,.06); font-size:17rpx; }
+.head-tools { gap:18rpx; }.music-toggle { width:auto; height:auto; border:0; background:none; }.music-toggle text { color:#c77dff; font-size:28rpx; }.end-link { padding:7rpx 16rpx; border-radius:99rpx; color:rgba(232,224,240,.42); background:rgba(255,255,255,.055); font-size:18rpx; }
+.game-table { position:relative; z-index:2; height:690rpx; margin:0; overflow:hidden; border:0; border-radius:0; background:transparent; box-shadow:none; }
+.game-table::before { content:""; position:absolute; z-index:0; left:50%; top:50%; width:74%; height:56%; transform:translate(-50%,-50%); border:2rpx solid rgba(199,125,255,.24); border-radius:50%; background:radial-gradient(ellipse at 50% 35%,rgba(60,20,100,.76),rgba(25,8,50,.88) 62%,rgba(12,4,28,.95)); box-shadow:0 0 80rpx 16rpx rgba(160,60,220,.18),0 0 150rpx 30rpx rgba(194,24,91,.1),inset 0 1rpx 0 rgba(255,255,255,.08); }
+.player { z-index:6; color:#e8e0f0; }.player.top{top:18rpx}.player.left{left:22rpx;top:265rpx}.player.right{right:22rpx;top:265rpx}.avatar-image { width:78rpx;height:78rpx;border:3rpx solid rgba(199,125,255,.32);background:#241038;box-shadow:0 8rpx 26rpx rgba(0,0,0,.38)}.count{padding:3rpx 10rpx;border-radius:99rpx;color:rgba(232,224,240,.48);background:rgba(0,0,0,.25);font-size:18rpx}.player.has-power .avatar-image{border-color:#ff6b9d;box-shadow:0 0 34rpx rgba(212,0,106,.7)}
+.desk-center { z-index:4; top:37%; width:56%; }.desk-label { color:rgba(199,125,255,.48); font-size:17rpx; letter-spacing:3rpx; }.empty-desk { color:rgba(232,224,240,.3); }.last-play { margin-top:8rpx; color:rgba(199,125,255,.58); font-size:19rpx; }
+.table-play{z-index:7}.top-play{top:120rpx}.left-play{left:112rpx;top:290rpx}.right-play{right:112rpx;top:290rpx}.bottom-play{bottom:90rpx}.pass-mark{background:rgba(199,125,255,.1);color:rgba(232,224,240,.56)}
+.played-history { z-index:5; top:54%; width:360rpx; height:230rpx; border:1rpx solid rgba(199,125,255,.08); background:rgba(12,4,28,.35); backdrop-filter:blur(8px); }.played-action { opacity:.48; }.played-action.latest { border-color:#d4006a; background:rgba(194,24,91,.13); box-shadow:0 0 22rpx rgba(212,0,106,.3); }.played-action.latest .history-cards :deep(.card){border-color:#ff6b9d;box-shadow:0 0 12rpx rgba(212,0,106,.65)}.action-player{color:#e8d0ff}.history-pass{color:rgba(232,224,240,.48)}
+.turn-pill { z-index:9; bottom:24rpx; color:#e8d0ff; background:rgba(194,24,91,.16); border:1rpx solid rgba(212,0,106,.28); box-shadow:0 0 28rpx rgba(212,0,106,.16); animation:pulse-active 2s ease-in-out infinite; }
+.power-transfer-animation { background:rgba(20,5,36,.92); box-shadow:0 0 50rpx rgba(199,125,255,.5); }.power-transfer-animation .power-orb{color:#fff;background:radial-gradient(circle,#ff8fc1,#d4006a);box-shadow:0 0 34rpx rgba(212,0,106,.8)}.power-transfer-animation text{color:#ff6b9d}
+.hand-panel { position:relative; z-index:8; margin-top:0; padding:20rpx 24rpx calc(28rpx + env(safe-area-inset-bottom)); border-top:1rpx solid rgba(199,125,255,.07); border-radius:0; color:#e8e0f0; background:rgba(0,0,0,.26); }.hand-title { color:rgba(199,125,255,.58); font-size:20rpx; letter-spacing:2rpx; }.selected-count{color:rgba(232,224,240,.36);font-size:20rpx}.hand-scroll{height:170rpx;margin-top:8rpx}.hand-row{gap:0;padding:28rpx 4rpx 14rpx}.hand-row :deep(.card){margin-left:-18rpx;box-shadow:0 8rpx 18rpx rgba(0,0,0,.3)}.hand-row :deep(.card:first-child){margin-left:0}.hand-row :deep(.card.selected){border-color:#d4006a;box-shadow:0 0 24rpx rgba(212,0,106,.7);transform:translateY(-22rpx)}
+.actions{gap:12rpx}.actions :deep(button){border:0!important;border-radius:999rpx!important}.recommend-btn :deep(button){background:rgba(199,125,255,.12)!important;color:#c77dff!important}.pass-btn :deep(button){background:rgba(255,255,255,.06)!important;color:rgba(232,224,240,.5)!important}.play-btn :deep(button){background:linear-gradient(135deg,#9b006e,#d4006a 62%,#e91e8c)!important;box-shadow:0 8rpx 34rpx rgba(212,0,106,.32)}
+@keyframes pulse-active{50%{box-shadow:0 0 38rpx rgba(212,0,106,.35)}}
+@media screen and (min-width:768px){.table-page{max-width:920px;box-shadow:0 0 80px rgba(0,0,0,.55)}.game-table{height:610px}.game-table::before{width:72%;height:55%}.hand-panel{padding-left:36px;padding-right:36px}.played-history{width:410px;height:250px}}
 </style>
